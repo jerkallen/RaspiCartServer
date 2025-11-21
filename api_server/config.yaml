@@ -1,0 +1,64 @@
+# 智能巡检系统BentoML API服务配置文件
+
+server:
+  host: "0.0.0.0"
+  port: 3000
+  workers: 4
+  timeout: 300                    # 请求处理超时（秒）
+  
+  # HTTP Keep-Alive 连接优化
+  keepalive_timeout: 60           # Keep-Alive 连接空闲超时（秒）
+  max_keepalive_connections: 100  # 最大 Keep-Alive 连接数
+  limit_concurrency: 200          # 最大并发连接数
+
+# SSL/HTTPS 配置（如需要）
+ssl:
+  enabled: false
+  certfile: "certs/server.crt"
+  keyfile: "certs/server.key"
+
+logging:
+  level: "INFO"
+  format: "json"
+
+# 任务处理器配置
+projects:
+  # 任务1: 指针仪表读数
+  - name: task1_pointer_reader
+    enabled: true
+    description: "指针式仪表读数识别"
+    project_path: "processors/task1_pointer_reader"
+    params:
+      model: "qwen-vl-plus"
+  
+  # 任务2: 高温物体检测
+  - name: task2_temperature
+    enabled: true
+    description: "高温物体检测"
+    project_path: "processors/task2_temperature"
+    params:
+      warning_threshold: 60.0
+      danger_threshold: 80.0
+  
+  # 任务3: 烟雾判断A
+  - name: task3_smoke_a
+    enabled: true
+    description: "烟雾判断A"
+    project_path: "processors/task3_smoke_a"
+    params:
+      model: "qwen-vl-plus"
+  
+  # 任务4: 烟雾判断B
+  - name: task4_smoke_b
+    enabled: true
+    description: "烟雾判断B"
+    project_path: "processors/task4_smoke_b"
+    params:
+      model: "qwen-vl-plus"
+
+# 全局限制
+limits:
+  max_image_size: 10485760      # 10MB
+  max_images_per_request: 10
+  max_request_size: 52428800    # 50MB
+
