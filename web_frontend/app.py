@@ -108,7 +108,6 @@ def get_tasks():
                 "task_id": task['task_id'],
                 "station_id": task['station_id'],
                 "task_type": task['task_type'],
-                "priority": task['priority'],
                 "params": task.get('params', {})
             })
         
@@ -170,7 +169,6 @@ def add_task():
             task_id=task_id,
             station_id=data['station_id'],
             task_type=data['task_type'],
-            priority=data.get('priority', 'medium'),
             params=data.get('params')
         )
         

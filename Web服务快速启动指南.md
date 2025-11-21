@@ -73,7 +73,6 @@ http://服务器IP:5000
 #### 1. 任务管理
 - 输入站点ID
 - 选择任务类型(1-4)
-- 设置优先级
 - 点击"添加任务"
 
 #### 2. 任务队列
@@ -129,9 +128,8 @@ http://服务器IP:5000
 
 1. 在左侧边栏输入站点ID: `1`
 2. 选择任务类型: `任务1 - 指针仪表`
-3. 选择优先级: `中`
-4. 点击"添加任务"按钮
-5. 查看任务队列是否显示新任务
+3. 点击"添加任务"按钮
+4. 查看任务队列是否显示新任务
 
 ### 2. 测试WebSocket连接
 
@@ -164,8 +162,7 @@ curl -X POST http://localhost:5000/api/tasks/add \
   -H "Content-Type: application/json" \
   -d '{
     "station_id": 1,
-    "task_type": 1,
-    "priority": "medium"
+    "task_type": 1
   }'
 ```
 

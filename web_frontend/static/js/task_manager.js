@@ -74,7 +74,7 @@ class TaskManager {
             <div class="task-item">
                 <div class="task-info">
                     <div class="task-type">${taskNames[task.task_type] || '未知任务'}</div>
-                    <div class="task-station">站点 ${task.station_id} | 优先级: ${task.priority}</div>
+                    <div class="task-station">站点 ${task.station_id}</div>
                 </div>
                 <button class="task-delete" onclick="taskManager.deleteTask('${task.task_id}')">删除</button>
             </div>
@@ -91,14 +91,15 @@ class TaskManager {
 
     // 添加任务
     async addTask() {
-        const stationId = document.getElementById('station-id').value;
         const taskType = document.getElementById('task-type').value;
-        const priority = document.getElementById('priority').value;
 
-        if (!stationId || !taskType) {
-            showNotification('请填写站点ID和任务类型', 'warning');
+        if (!taskType) {
+            showNotification('请选择任务类型', 'warning');
             return;
         }
+
+        // 站点ID与任务类型一一对应
+        const stationId = parseInt(taskType);
 
         try {
             const response = await fetch('/api/tasks/add', {
@@ -107,9 +108,8 @@ class TaskManager {
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({
-                    station_id: parseInt(stationId),
+                    station_id: stationId,
                     task_type: parseInt(taskType),
-                    priority: priority,
                     params: {}
                 })
             });
@@ -119,9 +119,6 @@ class TaskManager {
             if (result.status === 'success') {
                 showNotification('任务添加成功', 'success');
                 this.loadTasks();
-                
-                // 清空输入
-                document.getElementById('station-id').value = '';
             } else {
                 showNotification('任务添加失败: ' + result.error.message, 'danger');
             }

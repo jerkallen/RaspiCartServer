@@ -92,7 +92,6 @@ http://服务器IP:5000
   {
     "station_id": 1,
     "task_type": 1,
-    "priority": "medium",
     "params": {}
   }
   ```

@@ -89,7 +89,6 @@ def create_sample_tasks(db: DatabaseManager):
         {
             "station_id": 1,
             "task_type": 1,
-            "priority": "high",
             "params": {
                 "camera_angle": 30,
                 "description": "1号站气压表读数"
@@ -98,7 +97,6 @@ def create_sample_tasks(db: DatabaseManager):
         {
             "station_id": 3,
             "task_type": 1,
-            "priority": "medium",
             "params": {
                 "camera_angle": 30,
                 "description": "3号站气压表读数"
@@ -107,7 +105,6 @@ def create_sample_tasks(db: DatabaseManager):
         {
             "station_id": 5,
             "task_type": 2,
-            "priority": "high",
             "params": {
                 "description": "5号站温度检测"
             }
@@ -115,7 +112,6 @@ def create_sample_tasks(db: DatabaseManager):
         {
             "station_id": 7,
             "task_type": 3,
-            "priority": "medium",
             "params": {
                 "description": "7号站烟雾监测A"
             }
@@ -123,7 +119,6 @@ def create_sample_tasks(db: DatabaseManager):
         {
             "station_id": 9,
             "task_type": 4,
-            "priority": "low",
             "params": {
                 "description": "9号站烟雾监测B"
             }
@@ -142,7 +137,7 @@ def create_sample_tasks(db: DatabaseManager):
     pending_tasks = db.get_pending_tasks()
     logger.info(f"\n当前待执行任务: {len(pending_tasks)} 个")
     for task in pending_tasks:
-        logger.info(f"  - 站点{task['station_id']} | 类型{task['task_type']} | 优先级:{task['priority']}")
+        logger.info(f"  - 站点{task['station_id']} | 类型{task['task_type']}")
 
 
 def reset_database():

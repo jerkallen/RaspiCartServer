@@ -11,12 +11,12 @@
     --bg-primary: #1a1a2e;
     --bg-secondary: #16213e;
     --bg-card: rgba(22, 33, 62, 0.8);
-    --accent-color: #0f4c75;
-    --accent-hover: #1b6fa8;
-    --text-primary: #eee;
-    --text-secondary: #bbb;
-    --border-color: #334;
-    --success-color: #2ecc71;
+    --accent-color: #2980b9;
+    --accent-hover: #3498db;
+    --text-primary: #f5f5f5;
+    --text-secondary: #d0d0d0;
+    --border-color: #445;
+    --success-color: #27ae60;
     --warning-color: #f39c12;
     --danger-color: #e74c3c;
     --shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
@@ -43,7 +43,7 @@ body {
 }
 
 .header-title {
-    font-size: 24px;
+    font-size: 26px;
     font-weight: bold;
     color: var(--text-primary);
 }
@@ -61,6 +61,7 @@ body {
     padding: 8px 16px;
     background: rgba(255, 255, 255, 0.05);
     border-radius: 20px;
+    font-size: 15px;
 }
 
 .status-indicator {
@@ -105,12 +106,12 @@ body {
 }
 
 .section-title {
-    font-size: 16px;
+    font-size: 17px;
     font-weight: bold;
-    color: var(--accent-color);
+    color: #3498db;
     margin-bottom: 15px;
     padding-bottom: 8px;
-    border-bottom: 2px solid var(--accent-color);
+    border-bottom: 2px solid #3498db;
 }
 
 /* 任务管理 */
@@ -127,17 +128,18 @@ body {
 }
 
 .form-group label {
-    font-size: 12px;
+    font-size: 14px;
     color: var(--text-secondary);
+    font-weight: 500;
 }
 
 .form-input, .form-select {
-    padding: 8px 12px;
+    padding: 10px 14px;
     background: rgba(255, 255, 255, 0.05);
     border: 1px solid var(--border-color);
     border-radius: 5px;
     color: var(--text-primary);
-    font-size: 14px;
+    font-size: 15px;
 }
 
 .form-input:focus, .form-select:focus {
@@ -150,7 +152,7 @@ body {
     border: none;
     border-radius: 5px;
     cursor: pointer;
-    font-size: 14px;
+    font-size: 15px;
     font-weight: bold;
     transition: all 0.3s ease;
 }
@@ -197,12 +199,12 @@ body {
 }
 
 .task-info .task-type {
-    font-size: 14px;
+    font-size: 15px;
     font-weight: bold;
 }
 
 .task-info .task-station {
-    font-size: 12px;
+    font-size: 14px;
     color: var(--text-secondary);
 }
 
@@ -210,10 +212,10 @@ body {
     background: var(--danger-color);
     color: white;
     border: none;
-    padding: 5px 10px;
+    padding: 6px 12px;
     border-radius: 3px;
     cursor: pointer;
-    font-size: 12px;
+    font-size: 13px;
 }
 
 .task-delete:hover {
@@ -223,7 +225,7 @@ body {
 .empty-message {
     text-align: center;
     color: var(--text-secondary);
-    font-size: 14px;
+    font-size: 15px;
     padding: 20px;
 }
 
@@ -237,11 +239,12 @@ body {
 .info-row {
     display: flex;
     justify-content: space-between;
-    font-size: 13px;
+    font-size: 15px;
 }
 
 .info-label {
     color: var(--text-secondary);
+    font-weight: 500;
 }
 
 .info-value {
@@ -257,7 +260,7 @@ body {
     padding: 10px;
     border-radius: 5px;
     font-family: 'Courier New', monospace;
-    font-size: 12px;
+    font-size: 13px;
 }
 
 .log-entry {
@@ -325,14 +328,14 @@ body {
 }
 
 .panel-title {
-    font-size: 18px;
+    font-size: 20px;
     font-weight: bold;
 }
 
 .panel-status {
-    padding: 4px 12px;
+    padding: 6px 14px;
     border-radius: 12px;
-    font-size: 12px;
+    font-size: 14px;
     font-weight: bold;
 }
 
@@ -373,19 +376,20 @@ body {
 }
 
 .data-label {
-    font-size: 12px;
+    font-size: 14px;
     color: var(--text-secondary);
     margin-bottom: 5px;
+    font-weight: 500;
 }
 
 .data-value {
-    font-size: 24px;
+    font-size: 28px;
     font-weight: bold;
     color: var(--text-primary);
 }
 
 .data-unit {
-    font-size: 14px;
+    font-size: 16px;
     color: var(--text-secondary);
     margin-left: 3px;
 }
@@ -415,7 +419,7 @@ body {
     background: linear-gradient(to top, rgba(0, 0, 0, 0.8), transparent);
     padding: 10px;
     color: white;
-    font-size: 12px;
+    font-size: 13px;
 }
 
 .no-image {
@@ -424,7 +428,7 @@ body {
     justify-content: center;
     height: 100%;
     color: var(--text-secondary);
-    font-size: 14px;
+    font-size: 16px;
 }
 
 /* 操作按钮 */
@@ -435,8 +439,8 @@ body {
 
 .panel-actions .btn {
     flex: 1;
-    padding: 8px;
-    font-size: 12px;
+    padding: 10px;
+    font-size: 14px;
 }
 
 /* 滚动条样式 */
@@ -547,14 +551,15 @@ body {
 }
 
 .stat-card .stat-value {
-    font-size: 28px;
+    font-size: 32px;
     font-weight: bold;
     color: var(--accent-color);
 }
 
 .stat-card .stat-label {
-    font-size: 12px;
+    font-size: 14px;
     color: var(--text-secondary);
     margin-top: 5px;
+    font-weight: 500;
 }
 

@@ -63,7 +63,6 @@ records = db.get_task_records(
 task_id = db.add_task_to_queue(
     station_id=3,
     task_type=1,
-    priority="high",
     params={"camera_angle": 30}
 )
 
@@ -123,7 +122,6 @@ db.update_cart_status(
 | task_id | TEXT | 任务ID（唯一） |
 | station_id | INTEGER | 站点ID |
 | task_type | INTEGER | 任务类型（1-4） |
-| priority | TEXT | 优先级（high/medium/low） |
 | status | TEXT | 状态（pending/assigned/completed/failed） |
 | params | TEXT | 参数（JSON） |
 | assigned_at | DATETIME | 分配时间 |

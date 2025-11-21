@@ -99,7 +99,6 @@ class DatabaseManager:
                     task_id TEXT UNIQUE NOT NULL,
                     station_id INTEGER NOT NULL,
                     task_type INTEGER NOT NULL,
-                    priority TEXT DEFAULT 'medium',
                     status TEXT DEFAULT 'pending',
                     params TEXT,
                     assigned_at DATETIME,
@@ -363,7 +362,6 @@ class DatabaseManager:
         self,
         station_id: int,
         task_type: int,
-        priority: str = "medium",
         params: Optional[Dict[str, Any]] = None,
         task_id: Optional[str] = None
     ) -> str:
@@ -373,7 +371,6 @@ class DatabaseManager:
         Args:
             station_id: 站点ID
             task_type: 任务类型
-            priority: 优先级（high/medium/low）
             params: 任务参数
             task_id: 任务ID（可选，不提供则自动生成）
         
@@ -387,13 +384,12 @@ class DatabaseManager:
             cursor = conn.cursor()
             cursor.execute("""
                 INSERT INTO task_queue 
-                (task_id, station_id, task_type, priority, status, params)
-                VALUES (?, ?, ?, ?, 'pending', ?)
+                (task_id, station_id, task_type, status, params)
+                VALUES (?, ?, ?, 'pending', ?)
             """, (
                 task_id,
                 station_id,
                 task_type,
-                priority,
                 json.dumps(params, ensure_ascii=False) if params else None
             ))
             
@@ -415,13 +411,7 @@ class DatabaseManager:
             cursor.execute("""
                 SELECT * FROM task_queue 
                 WHERE status = 'pending'
-                ORDER BY 
-                    CASE priority 
-                        WHEN 'high' THEN 1 
-                        WHEN 'medium' THEN 2 
-                        WHEN 'low' THEN 3 
-                    END,
-                    created_at ASC
+                ORDER BY created_at ASC
                 LIMIT ?
             """, (limit,))
             
@@ -727,8 +717,7 @@ if __name__ == "__main__":
         # 测试添加任务队列
         queue_task_id = db.add_task_to_queue(
             station_id=1,
-            task_type=1,
-            priority="high"
+            task_type=1
         )
         logger.info(f"添加任务到队列: {queue_task_id}")
         

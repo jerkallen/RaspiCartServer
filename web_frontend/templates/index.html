@@ -23,7 +23,7 @@
                 <div class="status-indicator offline"></div>
                 <span class="status-text">小车离线</span>
             </div>
-            <div style="color: #bbb; font-size: 14px;" id="current-time">--:--:--</div>
+            <div style="color: #d0d0d0; font-size: 16px; font-weight: 500;" id="current-time">--:--:--</div>
         </div>
     </div>
 
@@ -36,24 +36,12 @@
                 <h3 class="section-title">📋 任务管理</h3>
                 <div class="task-controls">
                     <div class="form-group">
-                        <label>站点ID</label>
-                        <input type="number" id="station-id" class="form-input" placeholder="输入站点ID" min="1">
-                    </div>
-                    <div class="form-group">
                         <label>任务类型</label>
                         <select id="task-type" class="form-select">
-                            <option value="1">任务1 - 指针仪表</option>
-                            <option value="2">任务2 - 温度检测</option>
-                            <option value="3">任务3 - 烟雾监测A</option>
-                            <option value="4">任务4 - 烟雾监测B</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label>优先级</label>
-                        <select id="priority" class="form-select">
-                            <option value="high">高</option>
-                            <option value="medium" selected>中</option>
-                            <option value="low">低</option>
+                            <option value="1">任务1 - 指针仪表 (站点1)</option>
+                            <option value="2">任务2 - 温度检测 (站点2)</option>
+                            <option value="3">任务3 - 烟雾监测A (站点3)</option>
+                            <option value="4">任务4 - 烟雾监测B (站点4)</option>
                         </select>
                     </div>
                     <button id="add-task-btn" class="btn btn-primary">➕ 添加任务</button>

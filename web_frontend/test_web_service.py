@@ -55,7 +55,6 @@ def test_web_service(base_url="http://localhost:5000"):
         task_data = {
             "station_id": 99,
             "task_type": 1,
-            "priority": "medium",
             "params": {}
         }
         response = requests.post(
