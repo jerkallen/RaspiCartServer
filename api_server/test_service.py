@@ -220,13 +220,13 @@ def main():
         results = []
         
         # 测试健康检查
-        # results.append(("健康检查", test_health(base_url, session)))
+        results.append(("健康检查", test_health(base_url, session)))
         
         # 测试任务1
         results.append(("任务1", test_process_task1(base_url, session)))
         
         # 测试任务2
-        # results.append(("任务2", test_process_task2(base_url, session)))
+        results.append(("任务2", test_process_task2(base_url, session)))
         
         # 显示测试结果
         print("\n" + "="*60)

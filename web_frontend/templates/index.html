@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>智能巡检系统 - 管理界面</title>
+    
+    <!-- 样式文件 -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    
+    <!-- ECharts图表库 -->
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+    
+    <!-- Socket.IO客户端 -->
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+</head>
+<body>
+    <!-- Header -->
+    <div class="header">
+        <div class="header-title">🚗 智能巡检系统</div>
+        <div class="header-status">
+            <div class="cart-status">
+                <div class="status-indicator offline"></div>
+                <span class="status-text">小车离线</span>
+            </div>
+            <div style="color: #bbb; font-size: 14px;" id="current-time">--:--:--</div>
+        </div>
+    </div>
+
+    <!-- 主容器 -->
+    <div class="main-container">
+        <!-- 侧边栏 -->
+        <aside class="sidebar">
+            <!-- 任务管理 -->
+            <div class="sidebar-section">
+                <h3 class="section-title">📋 任务管理</h3>
+                <div class="task-controls">
+                    <div class="form-group">
+                        <label>站点ID</label>
+                        <input type="number" id="station-id" class="form-input" placeholder="输入站点ID" min="1">
+                    </div>
+                    <div class="form-group">
+                        <label>任务类型</label>
+                        <select id="task-type" class="form-select">
+                            <option value="1">任务1 - 指针仪表</option>
+                            <option value="2">任务2 - 温度检测</option>
+                            <option value="3">任务3 - 烟雾监测A</option>
+                            <option value="4">任务4 - 烟雾监测B</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>优先级</label>
+                        <select id="priority" class="form-select">
+                            <option value="high">高</option>
+                            <option value="medium" selected>中</option>
+                            <option value="low">低</option>
+                        </select>
+                    </div>
+                    <button id="add-task-btn" class="btn btn-primary">➕ 添加任务</button>
+                </div>
+                
+                <div style="margin-top: 15px;">
+                    <div class="stats-cards">
+                        <div class="stat-card">
+                            <div class="stat-value" id="task-count">0</div>
+                            <div class="stat-label">待处理任务</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 任务队列 -->
+            <div class="sidebar-section">
+                <h3 class="section-title">📝 任务队列</h3>
+                <div class="task-queue" id="task-queue-list">
+                    <div class="empty-message">暂无待处理任务</div>
+                </div>
+                <button id="clear-queue-btn" class="btn btn-secondary" style="width: 100%; margin-top: 10px;">
+                    🗑️ 清空已完成
+                </button>
+            </div>
+
+            <!-- 小车状态 -->
+            <div class="sidebar-section">
+                <h3 class="section-title">🚗 小车状态</h3>
+                <div class="cart-info">
+                    <div class="info-row">
+                        <span class="info-label">在线状态</span>
+                        <span class="info-value" id="cart-online">--</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">当前站点</span>
+                        <span class="info-value" id="cart-station">--</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">运行模式</span>
+                        <span class="info-value" id="cart-mode">--</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">电池电量</span>
+                        <span class="info-value" id="cart-battery">--</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">最近活动</span>
+                        <span class="info-value" id="cart-activity">--</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 系统日志 -->
+            <div class="sidebar-section">
+                <h3 class="section-title">📄 系统日志</h3>
+                <div class="log-container" id="system-logs">
+                    <div class="log-entry log-info">
+                        <span class="log-time">[--:--:--]</span> 系统准备就绪
+                    </div>
+                </div>
+            </div>
+
+            <!-- 系统统计 -->
+            <div class="sidebar-section">
+                <h3 class="section-title">📊 系统统计</h3>
+                <div class="stats-cards">
+                    <div class="stat-card">
+                        <div class="stat-value" id="total-tasks">0</div>
+                        <div class="stat-label">总任务数</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="today-tasks">0</div>
+                        <div class="stat-label">今日任务</div>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- 主内容区 - 田字格布局 -->
+        <main class="content-area">
+            <div class="task-panels">
+                <!-- 任务1: 指针仪表 -->
+                <div class="task-panel">
+                    <div class="panel-header">
+                        <h2 class="panel-title">📊 任务1 - 指针仪表</h2>
+                        <span class="panel-status normal" id="status-1">正常</span>
+                    </div>
+                    
+                    <div class="chart-container">
+                        <div id="chart-1" style="width: 100%; height: 100%;"></div>
+                    </div>
+                    
+                    <div class="latest-data">
+                        <div class="data-item">
+                            <div class="data-label">读数值</div>
+                            <div class="data-value">
+                                <span id="value-1">--</span>
+                                <span class="data-unit" id="value-unit-1">MPa</span>
+                            </div>
+                        </div>
+                        <div class="data-item">
+                            <div class="data-label">置信度</div>
+                            <div class="data-value">
+                                <span id="confidence-1">--</span>
+                                <span class="data-unit" id="confidence-unit-1">%</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="latest-image">
+                        <img id="image-1" src="" alt="最新图片" style="display: none;">
+                        <div class="no-image" id="no-image-1">暂无图片</div>
+                        <div class="image-overlay" id="image-overlay-1">--</div>
+                    </div>
+                    
+                    <div class="panel-actions">
+                        <button class="btn btn-secondary">查看历史</button>
+                        <button class="btn btn-secondary">导出数据</button>
+                    </div>
+                </div>
+
+                <!-- 任务2: 温度检测 -->
+                <div class="task-panel">
+                    <div class="panel-header">
+                        <h2 class="panel-title">🌡️ 任务2 - 温度检测</h2>
+                        <span class="panel-status normal" id="status-2">正常</span>
+                    </div>
+                    
+                    <div class="chart-container">
+                        <div id="chart-2" style="width: 100%; height: 100%;"></div>
+                    </div>
+                    
+                    <div class="latest-data">
+                        <div class="data-item">
+                            <div class="data-label">最高温度</div>
+                            <div class="data-value">
+                                <span id="max-temp-2">--</span>
+                                <span class="data-unit" id="max-temp-unit-2">℃</span>
+                            </div>
+                        </div>
+                        <div class="data-item">
+                            <div class="data-label">平均温度</div>
+                            <div class="data-value">
+                                <span id="avg-temp-2">--</span>
+                                <span class="data-unit" id="avg-temp-unit-2">℃</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="latest-image">
+                        <img id="image-2" src="" alt="最新图片" style="display: none;">
+                        <div class="no-image" id="no-image-2">暂无图片</div>
+                        <div class="image-overlay" id="image-overlay-2">--</div>
+                    </div>
+                    
+                    <div class="panel-actions">
+                        <button class="btn btn-secondary">查看历史</button>
+                        <button class="btn btn-secondary">导出数据</button>
+                    </div>
+                </div>
+
+                <!-- 任务3: 烟雾监测A -->
+                <div class="task-panel">
+                    <div class="panel-header">
+                        <h2 class="panel-title">💨 任务3 - 烟雾监测A</h2>
+                        <span class="panel-status normal" id="status-3">正常</span>
+                    </div>
+                    
+                    <div class="chart-container">
+                        <div id="chart-3" style="width: 100%; height: 100%;"></div>
+                    </div>
+                    
+                    <div class="latest-data">
+                        <div class="data-item">
+                            <div class="data-label">检测结果</div>
+                            <div class="data-value">
+                                <span id="smoke-3">--</span>
+                            </div>
+                        </div>
+                        <div class="data-item">
+                            <div class="data-label">置信度</div>
+                            <div class="data-value">
+                                <span id="confidence-3">--</span>
+                                <span class="data-unit" id="confidence-unit-3">%</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="latest-image">
+                        <img id="image-3" src="" alt="最新图片" style="display: none;">
+                        <div class="no-image" id="no-image-3">暂无图片</div>
+                        <div class="image-overlay" id="image-overlay-3">--</div>
+                    </div>
+                    
+                    <div class="panel-actions">
+                        <button class="btn btn-secondary">查看历史</button>
+                        <button class="btn btn-secondary">导出数据</button>
+                    </div>
+                </div>
+
+                <!-- 任务4: 烟雾监测B -->
+                <div class="task-panel">
+                    <div class="panel-header">
+                        <h2 class="panel-title">💨 任务4 - 烟雾监测B</h2>
+                        <span class="panel-status normal" id="status-4">正常</span>
+                    </div>
+                    
+                    <div class="chart-container">
+                        <div id="chart-4" style="width: 100%; height: 100%;"></div>
+                    </div>
+                    
+                    <div class="latest-data">
+                        <div class="data-item">
+                            <div class="data-label">检测结果</div>
+                            <div class="data-value">
+                                <span id="smoke-4">--</span>
+                            </div>
+                        </div>
+                        <div class="data-item">
+                            <div class="data-label">置信度</div>
+                            <div class="data-value">
+                                <span id="confidence-4">--</span>
+                                <span class="data-unit" id="confidence-unit-4">%</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="latest-image">
+                        <img id="image-4" src="" alt="最新图片" style="display: none;">
+                        <div class="no-image" id="no-image-4">暂无图片</div>
+                        <div class="image-overlay" id="image-overlay-4">--</div>
+                    </div>
+                    
+                    <div class="panel-actions">
+                        <button class="btn btn-secondary">查看历史</button>
+                        <button class="btn btn-secondary">导出数据</button>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- 脚本文件 -->
+    <script src="{{ url_for('static', filename='js/websocket.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/charts.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/task_manager.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+    
+    <!-- 实时时钟 -->
+    <script>
+        function updateTime() {
+            const now = new Date();
+            const timeStr = now.toLocaleTimeString('zh-CN');
+            const timeEl = document.getElementById('current-time');
+            if (timeEl) {
+                timeEl.textContent = timeStr;
+            }
+        }
+        setInterval(updateTime, 1000);
+        updateTime();
+    </script>
+</body>
+</html>
+

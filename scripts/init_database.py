@@ -1,248 +1,309 @@
 """
-数据库初始化脚本
-用于创建SQLite数据库和所有必需的表
+数据库初始化脚本 - 智能巡检系统
+用于初始化数据库和创建示例数据
 """
-import sqlite3
+import sys
+import logging
 from pathlib import Path
-from datetime import datetime
+
+# 添加项目根目录到路径
+project_root = Path(__file__).parent.parent
+sys.path.insert(0, str(project_root))
+
+from scripts.db_manager import DatabaseManager
+
+# 配置日志
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s [%(levelname)s] %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
+
+logger = logging.getLogger(__name__)
 
 
-def get_db_path():
-    """获取数据库文件路径"""
-    # 脚本在 scripts/ 目录，数据库在 data/database/
-    base_dir = Path(__file__).parent.parent
-    db_dir = base_dir / "data" / "database"
-    db_dir.mkdir(parents=True, exist_ok=True)
-    return db_dir / "inspection.db"
-
-
-def create_tables(conn):
-    """创建所有数据表"""
-    cursor = conn.cursor()
-    
-    # 1. 任务记录表
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS task_records (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            task_id TEXT NOT NULL,
-            task_type INTEGER NOT NULL,
-            station_id INTEGER NOT NULL,
-            image_path TEXT,
-            result_data TEXT,
-            status TEXT DEFAULT 'normal',
-            confidence REAL,
-            processing_time REAL,
-            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
-    
-    # 创建索引
-    cursor.execute("""
-        CREATE INDEX IF NOT EXISTS idx_task_type 
-        ON task_records(task_type)
-    """)
-    
-    cursor.execute("""
-        CREATE INDEX IF NOT EXISTS idx_station_id 
-        ON task_records(station_id)
-    """)
-    
-    cursor.execute("""
-        CREATE INDEX IF NOT EXISTS idx_timestamp 
-        ON task_records(timestamp)
-    """)
-    
-    print("[OK] 创建表: task_records (任务记录表)")
-    
-    # 2. 任务队列表
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS task_queue (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            task_id TEXT UNIQUE NOT NULL,
-            station_id INTEGER NOT NULL,
-            task_type INTEGER NOT NULL,
-            priority TEXT DEFAULT 'medium',
-            status TEXT DEFAULT 'pending',
-            params TEXT,
-            assigned_at DATETIME,
-            completed_at DATETIME,
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
-    
-    # 创建索引
-    cursor.execute("""
-        CREATE INDEX IF NOT EXISTS idx_status 
-        ON task_queue(status)
-    """)
-    
-    cursor.execute("""
-        CREATE INDEX IF NOT EXISTS idx_station_task 
-        ON task_queue(station_id, task_type)
-    """)
-    
-    print("[OK] 创建表: task_queue (任务队列表)")
-    
-    # 3. 报警日志表
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS alert_log (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            record_id INTEGER,
-            alert_level TEXT NOT NULL,
-            alert_type TEXT NOT NULL,
-            message TEXT,
-            handled BOOLEAN DEFAULT 0,
-            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (record_id) REFERENCES task_records(id)
-        )
-    """)
-    
-    # 创建索引
-    cursor.execute("""
-        CREATE INDEX IF NOT EXISTS idx_alert_level 
-        ON alert_log(alert_level)
-    """)
-    
-    cursor.execute("""
-        CREATE INDEX IF NOT EXISTS idx_handled 
-        ON alert_log(handled)
-    """)
-    
-    print("[OK] 创建表: alert_log (报警日志表)")
-    
-    # 4. 小车状态表
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS cart_status (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            online BOOLEAN DEFAULT 1,
-            current_station INTEGER,
-            mode TEXT DEFAULT 'idle',
-            battery_level INTEGER,
-            last_activity TEXT,
-            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
-    
-    print("[OK] 创建表: cart_status (小车状态表)")
-    
-    conn.commit()
-
-
-def insert_initial_data(conn):
-    """插入初始数据"""
-    cursor = conn.cursor()
-    
-    # 检查是否已有数据
-    cursor.execute("SELECT COUNT(*) FROM cart_status")
-    count = cursor.fetchone()[0]
-    
-    if count == 0:
-        # 插入初始小车状态
-        cursor.execute("""
-            INSERT INTO cart_status (online, current_station, mode, battery_level, last_activity)
-            VALUES (0, 0, 'idle', 100, '等待连接')
-        """)
-        print("[OK] 插入初始小车状态数据")
-    else:
-        print("[OK] 小车状态数据已存在，跳过初始化")
-    
-    conn.commit()
-
-
-def verify_tables(conn):
-    """验证表是否创建成功"""
-    cursor = conn.cursor()
-    
-    cursor.execute("""
-        SELECT name FROM sqlite_master 
-        WHERE type='table' 
-        ORDER BY name
-    """)
-    
-    tables = cursor.fetchall()
-    print("\n数据库中的表:")
-    for table in tables:
-        table_name = table[0]
-        cursor.execute(f"SELECT COUNT(*) FROM {table_name}")
-        count = cursor.fetchone()[0]
-        print(f"  - {table_name}: {count} 条记录")
-    
-    return len(tables) >= 4
-
-
-def init_database(interactive=True):
+def init_database(create_sample_data: bool = False):
     """
     初始化数据库
     
     Args:
-        interactive: 是否为交互模式（需要用户确认）
+        create_sample_data: 是否创建示例数据
     """
-    print("="*60)
-    print("智能巡检系统 - 数据库初始化")
-    print("="*60)
-    
-    db_path = get_db_path()
-    print(f"\n数据库路径: {db_path}")
-    
-    # 检查数据库是否已存在
-    db_exists = db_path.exists()
-    if db_exists:
-        print("[警告] 数据库文件已存在")
-        if interactive:
-            try:
-                user_input = input("是否要重新初始化？这将保留现有数据但确保表结构正确 (y/n): ")
-                if user_input.lower() != 'y':
-                    print("取消初始化")
-                    return False
-            except EOFError:
-                # 非交互模式，自动继续
-                print("非交互模式，自动继续初始化...")
-        else:
-            print("自动继续初始化...")
+    logger.info("="*60)
+    logger.info("开始初始化数据库")
+    logger.info("="*60)
     
     try:
-        # 连接数据库（如果不存在会自动创建）
-        conn = sqlite3.connect(str(db_path))
-        print("[OK] 数据库连接成功")
+        # 创建数据库管理器（会自动创建表）
+        db = DatabaseManager()
+        logger.info("✅ 数据库表创建成功")
         
-        # 创建表
-        print("\n创建数据表...")
-        create_tables(conn)
+        # 检查表是否存在
+        with db.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT name FROM sqlite_master 
+                WHERE type='table'
+                ORDER BY name
+            """)
+            tables = cursor.fetchall()
+            
+            logger.info(f"\n当前数据表 ({len(tables)} 个):")
+            for table in tables:
+                logger.info(f"  - {table[0]}")
+                
+                # 显示每个表的列信息
+                cursor.execute(f"PRAGMA table_info({table[0]})")
+                columns = cursor.fetchall()
+                logger.info(f"    字段 ({len(columns)} 个): {', '.join([col[1] for col in columns])}")
         
-        # 插入初始数据
-        print("\n插入初始数据...")
-        insert_initial_data(conn)
+        # 创建示例数据（如果需要）
+        if create_sample_data:
+            logger.info("\n创建示例数据...")
+            create_sample_tasks(db)
         
-        # 验证表
-        print("\n验证数据库...")
-        if verify_tables(conn):
-            print("\n[成功] 数据库初始化成功！")
-            success = True
-        else:
-            print("\n[失败] 数据库验证失败，表数量不足")
-            success = False
+        logger.info("\n" + "="*60)
+        logger.info("✅ 数据库初始化完成!")
+        logger.info("="*60)
         
-        # 关闭连接
-        conn.close()
+        return db
         
-        print("="*60)
-        return success
-        
-    except sqlite3.Error as e:
-        print(f"\n[失败] 数据库错误: {e}")
-        print("="*60)
-        return False
     except Exception as e:
-        print(f"\n[失败] 未知错误: {e}")
-        print("="*60)
-        return False
+        logger.error(f"❌ 数据库初始化失败: {e}")
+        raise
+
+
+def create_sample_tasks(db: DatabaseManager):
+    """
+    创建示例任务数据
+    
+    Args:
+        db: 数据库管理器
+    """
+    import uuid
+    
+    logger.info("\n添加示例任务到队列...")
+    
+    # 示例任务配置
+    sample_tasks = [
+        {
+            "station_id": 1,
+            "task_type": 1,
+            "priority": "high",
+            "params": {
+                "camera_angle": 30,
+                "description": "1号站气压表读数"
+            }
+        },
+        {
+            "station_id": 3,
+            "task_type": 1,
+            "priority": "medium",
+            "params": {
+                "camera_angle": 30,
+                "description": "3号站气压表读数"
+            }
+        },
+        {
+            "station_id": 5,
+            "task_type": 2,
+            "priority": "high",
+            "params": {
+                "description": "5号站温度检测"
+            }
+        },
+        {
+            "station_id": 7,
+            "task_type": 3,
+            "priority": "medium",
+            "params": {
+                "description": "7号站烟雾监测A"
+            }
+        },
+        {
+            "station_id": 9,
+            "task_type": 4,
+            "priority": "low",
+            "params": {
+                "description": "9号站烟雾监测B"
+            }
+        }
+    ]
+    
+    # 添加任务到队列
+    for task_config in sample_tasks:
+        task_id = db.add_task_to_queue(**task_config)
+        description = task_config.get('params', {}).get('description', '未命名任务')
+        logger.info(f"  ✓ 添加任务: {description} (ID: {task_id[:8]}...)")
+    
+    logger.info(f"✅ 成功添加 {len(sample_tasks)} 个示例任务")
+    
+    # 显示当前队列
+    pending_tasks = db.get_pending_tasks()
+    logger.info(f"\n当前待执行任务: {len(pending_tasks)} 个")
+    for task in pending_tasks:
+        logger.info(f"  - 站点{task['station_id']} | 类型{task['task_type']} | 优先级:{task['priority']}")
+
+
+def reset_database():
+    """
+    重置数据库（删除所有数据）
+    
+    警告：此操作会删除所有数据！
+    """
+    logger.warning("="*60)
+    logger.warning("⚠️  警告: 即将重置数据库，所有数据将被删除!")
+    logger.warning("="*60)
+    
+    response = input("\n确认要重置数据库吗? (yes/no): ").strip().lower()
+    
+    if response != 'yes':
+        logger.info("操作已取消")
+        return
+    
+    try:
+        db = DatabaseManager()
+        
+        with db.get_connection() as conn:
+            cursor = conn.cursor()
+            
+            # 删除所有表
+            tables = ['task_records', 'task_queue', 'alert_log', 'cart_status']
+            for table in tables:
+                cursor.execute(f"DROP TABLE IF EXISTS {table}")
+                logger.info(f"  ✓ 删除表: {table}")
+            
+            conn.commit()
+        
+        logger.info("✅ 数据库已重置")
+        logger.info("正在重新创建表...")
+        
+        # 重新初始化
+        init_database()
+        
+    except Exception as e:
+        logger.error(f"❌ 重置失败: {e}")
+        raise
+
+
+def show_statistics(db: DatabaseManager):
+    """
+    显示数据库统计信息
+    
+    Args:
+        db: 数据库管理器
+    """
+    logger.info("\n" + "="*60)
+    logger.info("数据库统计信息")
+    logger.info("="*60)
+    
+    with db.get_connection() as conn:
+        cursor = conn.cursor()
+        
+        # 任务记录统计
+        cursor.execute("SELECT COUNT(*) FROM task_records")
+        record_count = cursor.fetchone()[0]
+        logger.info(f"\n任务记录总数: {record_count}")
+        
+        if record_count > 0:
+            cursor.execute("""
+                SELECT task_type, COUNT(*) as count 
+                FROM task_records 
+                GROUP BY task_type
+                ORDER BY task_type
+            """)
+            for row in cursor.fetchall():
+                logger.info(f"  - 任务类型 {row[0]}: {row[1]} 条")
+        
+        # 任务队列统计
+        cursor.execute("SELECT COUNT(*) FROM task_queue")
+        queue_count = cursor.fetchone()[0]
+        logger.info(f"\n任务队列总数: {queue_count}")
+        
+        if queue_count > 0:
+            cursor.execute("""
+                SELECT status, COUNT(*) as count 
+                FROM task_queue 
+                GROUP BY status
+            """)
+            for row in cursor.fetchall():
+                logger.info(f"  - {row[0]}: {row[1]} 条")
+        
+        # 报警日志统计
+        cursor.execute("SELECT COUNT(*) FROM alert_log")
+        alert_count = cursor.fetchone()[0]
+        logger.info(f"\n报警日志总数: {alert_count}")
+        
+        if alert_count > 0:
+            cursor.execute("""
+                SELECT alert_level, COUNT(*) as count 
+                FROM alert_log 
+                GROUP BY alert_level
+            """)
+            for row in cursor.fetchall():
+                logger.info(f"  - {row[0]}: {row[1]} 条")
+        
+        # 小车状态记录
+        cursor.execute("SELECT COUNT(*) FROM cart_status")
+        status_count = cursor.fetchone()[0]
+        logger.info(f"\n小车状态记录: {status_count} 条")
+        
+        # 最新状态
+        latest_status = db.get_latest_cart_status()
+        if latest_status:
+            logger.info(f"  - 最新状态: {'在线' if latest_status['online'] else '离线'}")
+            logger.info(f"  - 当前站点: {latest_status.get('current_station', 'N/A')}")
+            logger.info(f"  - 运行模式: {latest_status.get('mode', 'N/A')}")
+            logger.info(f"  - 电池电量: {latest_status.get('battery_level', 'N/A')}%")
+    
+    logger.info("\n" + "="*60)
+
+
+def main():
+    """主函数"""
+    import argparse
+    
+    parser = argparse.ArgumentParser(description='数据库初始化工具')
+    parser.add_argument(
+        '--sample',
+        action='store_true',
+        help='创建示例数据'
+    )
+    parser.add_argument(
+        '--reset',
+        action='store_true',
+        help='重置数据库（删除所有数据）'
+    )
+    parser.add_argument(
+        '--stats',
+        action='store_true',
+        help='显示数据库统计信息'
+    )
+    
+    args = parser.parse_args()
+    
+    try:
+        if args.reset:
+            # 重置数据库
+            reset_database()
+        elif args.stats:
+            # 显示统计信息
+            db = DatabaseManager()
+            show_statistics(db)
+        else:
+            # 初始化数据库
+            init_database(create_sample_data=args.sample)
+            
+            if args.sample:
+                # 显示统计
+                db = DatabaseManager()
+                show_statistics(db)
+        
+    except Exception as e:
+        logger.error(f"执行失败: {e}")
+        sys.exit(1)
 
 
 if __name__ == "__main__":
-    import sys
-    # 检查是否为非交互模式（如果有命令行参数--non-interactive）
-    interactive = "--non-interactive" not in sys.argv
-    success = init_database(interactive=interactive)
-    exit(0 if success else 1)
+    main()
 

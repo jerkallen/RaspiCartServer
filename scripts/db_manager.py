@@ -1,46 +1,162 @@
 """
-数据库管理模块
-提供数据库操作的封装接口
+数据库管理器 - 智能巡检系统
+负责SQLite数据库的连接、操作和管理
 """
 import sqlite3
-from pathlib import Path
-from typing import Dict, List, Any, Optional, Tuple
-from datetime import datetime, timedelta
 import json
+import logging
+from pathlib import Path
+from datetime import datetime, timedelta
+from typing import Dict, List, Any, Optional, Tuple
 from contextlib import contextmanager
+
+logger = logging.getLogger(__name__)
 
 
 class DatabaseManager:
-    """数据库管理器"""
+    """数据库管理器类"""
     
     def __init__(self, db_path: Optional[str] = None):
         """
         初始化数据库管理器
         
         Args:
-            db_path: 数据库文件路径，默认使用标准路径
+            db_path: 数据库文件路径，默认为 data/database/inspection.db
         """
         if db_path is None:
-            base_dir = Path(__file__).parent.parent
-            db_path = base_dir / "data" / "database" / "inspection.db"
+            # 默认路径
+            project_root = Path(__file__).parent.parent
+            db_path = project_root / "data" / "database" / "inspection.db"
         
         self.db_path = Path(db_path)
+        self.db_path.parent.mkdir(parents=True, exist_ok=True)
         
-        if not self.db_path.exists():
-            raise FileNotFoundError(
-                f"数据库文件不存在: {self.db_path}\n"
-                f"请先运行 python scripts/init_database.py 初始化数据库"
-            )
+        logger.info(f"数据库路径: {self.db_path}")
+        
+        # 确保数据库表存在
+        self._ensure_tables()
     
     @contextmanager
     def get_connection(self):
-        """获取数据库连接（上下文管理器）"""
+        """
+        获取数据库连接的上下文管理器
+        
+        Yields:
+            sqlite3.Connection: 数据库连接
+        """
         conn = sqlite3.connect(str(self.db_path))
-        conn.row_factory = sqlite3.Row  # 支持字典式访问
+        conn.row_factory = sqlite3.Row  # 使用Row工厂，可以通过列名访问
         try:
             yield conn
+            conn.commit()
+        except Exception as e:
+            conn.rollback()
+            logger.error(f"数据库操作失败: {e}")
+            raise
         finally:
             conn.close()
+    
+    def _ensure_tables(self):
+        """确保所有数据表存在"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            
+            # 创建任务记录表
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS task_records (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    task_id TEXT NOT NULL,
+                    task_type INTEGER NOT NULL,
+                    station_id INTEGER NOT NULL,
+                    image_path TEXT,
+                    result_data TEXT,
+                    status TEXT DEFAULT 'normal',
+                    confidence REAL,
+                    processing_time REAL,
+                    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            
+            # 创建索引
+            cursor.execute("""
+                CREATE INDEX IF NOT EXISTS idx_task_type 
+                ON task_records(task_type)
+            """)
+            cursor.execute("""
+                CREATE INDEX IF NOT EXISTS idx_station_id 
+                ON task_records(station_id)
+            """)
+            cursor.execute("""
+                CREATE INDEX IF NOT EXISTS idx_timestamp 
+                ON task_records(timestamp)
+            """)
+            
+            # 创建任务队列表
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS task_queue (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    task_id TEXT UNIQUE NOT NULL,
+                    station_id INTEGER NOT NULL,
+                    task_type INTEGER NOT NULL,
+                    priority TEXT DEFAULT 'medium',
+                    status TEXT DEFAULT 'pending',
+                    params TEXT,
+                    assigned_at DATETIME,
+                    completed_at DATETIME,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            
+            # 创建索引
+            cursor.execute("""
+                CREATE INDEX IF NOT EXISTS idx_status 
+                ON task_queue(status)
+            """)
+            cursor.execute("""
+                CREATE INDEX IF NOT EXISTS idx_station_task 
+                ON task_queue(station_id, task_type)
+            """)
+            
+            # 创建报警日志表
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS alert_log (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    record_id INTEGER,
+                    alert_level TEXT NOT NULL,
+                    alert_type TEXT NOT NULL,
+                    message TEXT,
+                    handled BOOLEAN DEFAULT 0,
+                    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (record_id) REFERENCES task_records(id)
+                )
+            """)
+            
+            # 创建索引
+            cursor.execute("""
+                CREATE INDEX IF NOT EXISTS idx_alert_level 
+                ON alert_log(alert_level)
+            """)
+            cursor.execute("""
+                CREATE INDEX IF NOT EXISTS idx_handled 
+                ON alert_log(handled)
+            """)
+            
+            # 创建小车状态表
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS cart_status (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    online BOOLEAN DEFAULT 1,
+                    current_station INTEGER,
+                    mode TEXT DEFAULT 'idle',
+                    battery_level INTEGER,
+                    last_activity TEXT,
+                    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            
+            conn.commit()
+            logger.info("数据库表检查完成")
     
     # ==================== 任务记录相关 ====================
     
@@ -49,8 +165,8 @@ class DatabaseManager:
         task_id: str,
         task_type: int,
         station_id: int,
-        image_path: str,
         result_data: Dict[str, Any],
+        image_path: Optional[str] = None,
         status: str = "normal",
         confidence: Optional[float] = None,
         processing_time: Optional[float] = None
@@ -60,24 +176,24 @@ class DatabaseManager:
         
         Args:
             task_id: 任务ID
-            task_type: 任务类型（1-4）
+            task_type: 任务类型
             station_id: 站点ID
-            image_path: 图片路径
             result_data: 结果数据（字典）
+            image_path: 图片路径
             status: 状态（normal/warning/danger）
             confidence: 置信度
             processing_time: 处理时间
         
         Returns:
-            int: 记录ID
+            记录ID
         """
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("""
                 INSERT INTO task_records 
                 (task_id, task_type, station_id, image_path, result_data, 
-                 status, confidence, processing_time)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                 status, confidence, processing_time, timestamp)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 task_id,
                 task_type,
@@ -86,10 +202,13 @@ class DatabaseManager:
                 json.dumps(result_data, ensure_ascii=False),
                 status,
                 confidence,
-                processing_time
+                processing_time,
+                datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             ))
-            conn.commit()
-            return cursor.lastrowid
+            
+            record_id = cursor.lastrowid
+            logger.info(f"添加任务记录: ID={record_id}, 任务类型={task_type}, 站点={station_id}")
+            return record_id
     
     def get_task_records(
         self,
@@ -106,45 +225,39 @@ class DatabaseManager:
         Args:
             task_type: 任务类型过滤
             station_id: 站点ID过滤
-            start_date: 开始日期（YYYY-MM-DD）
-            end_date: 结束日期（YYYY-MM-DD）
+            start_date: 开始日期
+            end_date: 结束日期
             limit: 返回条数
             offset: 偏移量
         
         Returns:
-            List[Dict]: 记录列表
+            任务记录列表
         """
-        conditions = []
-        params = []
-        
-        if task_type is not None:
-            conditions.append("task_type = ?")
-            params.append(task_type)
-        
-        if station_id is not None:
-            conditions.append("station_id = ?")
-            params.append(station_id)
-        
-        if start_date:
-            conditions.append("DATE(timestamp) >= ?")
-            params.append(start_date)
-        
-        if end_date:
-            conditions.append("DATE(timestamp) <= ?")
-            params.append(end_date)
-        
-        where_clause = " AND ".join(conditions) if conditions else "1=1"
-        
-        query = f"""
-            SELECT * FROM task_records
-            WHERE {where_clause}
-            ORDER BY timestamp DESC
-            LIMIT ? OFFSET ?
-        """
-        params.extend([limit, offset])
-        
         with self.get_connection() as conn:
             cursor = conn.cursor()
+            
+            query = "SELECT * FROM task_records WHERE 1=1"
+            params = []
+            
+            if task_type is not None:
+                query += " AND task_type = ?"
+                params.append(task_type)
+            
+            if station_id is not None:
+                query += " AND station_id = ?"
+                params.append(station_id)
+            
+            if start_date:
+                query += " AND timestamp >= ?"
+                params.append(start_date)
+            
+            if end_date:
+                query += " AND timestamp <= ?"
+                params.append(end_date)
+            
+            query += " ORDER BY timestamp DESC LIMIT ? OFFSET ?"
+            params.extend([limit, offset])
+            
             cursor.execute(query, params)
             rows = cursor.fetchall()
             
@@ -153,62 +266,129 @@ class DatabaseManager:
                 record = dict(row)
                 # 解析JSON字段
                 if record.get('result_data'):
-                    record['result_data'] = json.loads(record['result_data'])
+                    try:
+                        record['result_data'] = json.loads(record['result_data'])
+                    except json.JSONDecodeError:
+                        pass
                 records.append(record)
             
             return records
     
-    def get_latest_record(
+    def get_latest_record_by_station(
         self,
-        task_type: int,
-        station_id: Optional[int] = None
+        station_id: int,
+        task_type: Optional[int] = None
     ) -> Optional[Dict[str, Any]]:
         """
-        获取最新的任务记录
+        获取指定站点的最新记录
+        
+        Args:
+            station_id: 站点ID
+            task_type: 任务类型（可选）
+        
+        Returns:
+            最新记录或None
+        """
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            
+            query = "SELECT * FROM task_records WHERE station_id = ?"
+            params = [station_id]
+            
+            if task_type is not None:
+                query += " AND task_type = ?"
+                params.append(task_type)
+            
+            query += " ORDER BY timestamp DESC LIMIT 1"
+            
+            cursor.execute(query, params)
+            row = cursor.fetchone()
+            
+            if row:
+                record = dict(row)
+                if record.get('result_data'):
+                    try:
+                        record['result_data'] = json.loads(record['result_data'])
+                    except json.JSONDecodeError:
+                        pass
+                return record
+            
+            return None
+    
+    def get_statistics(
+        self,
+        task_type: Optional[int] = None,
+        days: int = 7
+    ) -> Dict[str, Any]:
+        """
+        获取统计信息
         
         Args:
             task_type: 任务类型
-            station_id: 站点ID（可选）
+            days: 统计天数
         
         Returns:
-            Dict: 记录，不存在返回None
+            统计信息字典
         """
-        records = self.get_task_records(
-            task_type=task_type,
-            station_id=station_id,
-            limit=1
-        )
-        return records[0] if records else None
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            
+            start_date = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d 00:00:00")
+            
+            query = """
+                SELECT 
+                    COUNT(*) as total_count,
+                    COUNT(CASE WHEN status = 'normal' THEN 1 END) as normal_count,
+                    COUNT(CASE WHEN status = 'warning' THEN 1 END) as warning_count,
+                    COUNT(CASE WHEN status = 'danger' THEN 1 END) as danger_count,
+                    AVG(confidence) as avg_confidence,
+                    AVG(processing_time) as avg_processing_time
+                FROM task_records
+                WHERE timestamp >= ?
+            """
+            params = [start_date]
+            
+            if task_type is not None:
+                query += " AND task_type = ?"
+                params.append(task_type)
+            
+            cursor.execute(query, params)
+            row = cursor.fetchone()
+            
+            return dict(row) if row else {}
     
     # ==================== 任务队列相关 ====================
     
     def add_task_to_queue(
         self,
-        task_id: str,
         station_id: int,
         task_type: int,
         priority: str = "medium",
-        params: Optional[Dict[str, Any]] = None
-    ) -> int:
+        params: Optional[Dict[str, Any]] = None,
+        task_id: Optional[str] = None
+    ) -> str:
         """
         添加任务到队列
         
         Args:
-            task_id: 任务ID（唯一）
             station_id: 站点ID
             task_type: 任务类型
             priority: 优先级（high/medium/low）
-            params: 额外参数
+            params: 任务参数
+            task_id: 任务ID（可选，不提供则自动生成）
         
         Returns:
-            int: 记录ID
+            任务ID
         """
+        if task_id is None:
+            task_id = str(uuid.uuid4())
+        
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("""
                 INSERT INTO task_queue 
-                (task_id, station_id, task_type, priority, params)
-                VALUES (?, ?, ?, ?, ?)
+                (task_id, station_id, task_type, priority, status, params)
+                VALUES (?, ?, ?, ?, 'pending', ?)
             """, (
                 task_id,
                 station_id,
@@ -216,37 +396,45 @@ class DatabaseManager:
                 priority,
                 json.dumps(params, ensure_ascii=False) if params else None
             ))
-            conn.commit()
-            return cursor.lastrowid
+            
+            logger.info(f"添加任务到队列: {task_id}, 站点={station_id}, 类型={task_type}")
+            return task_id
     
-    def get_pending_tasks(self) -> List[Dict[str, Any]]:
+    def get_pending_tasks(self, limit: int = 10) -> List[Dict[str, Any]]:
         """
-        获取所有待处理的任务
+        获取待执行任务列表
+        
+        Args:
+            limit: 返回条数
         
         Returns:
-            List[Dict]: 任务列表
+            任务列表
         """
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("""
-                SELECT * FROM task_queue
+                SELECT * FROM task_queue 
                 WHERE status = 'pending'
                 ORDER BY 
-                    CASE priority
-                        WHEN 'high' THEN 1
-                        WHEN 'medium' THEN 2
-                        WHEN 'low' THEN 3
+                    CASE priority 
+                        WHEN 'high' THEN 1 
+                        WHEN 'medium' THEN 2 
+                        WHEN 'low' THEN 3 
                     END,
                     created_at ASC
-            """)
+                LIMIT ?
+            """, (limit,))
+            
             rows = cursor.fetchall()
             
             tasks = []
             for row in rows:
                 task = dict(row)
-                # 解析JSON字段
                 if task.get('params'):
-                    task['params'] = json.loads(task['params'])
+                    try:
+                        task['params'] = json.loads(task['params'])
+                    except json.JSONDecodeError:
+                        pass
                 tasks.append(task)
             
             return tasks
@@ -255,6 +443,7 @@ class DatabaseManager:
         self,
         task_id: str,
         status: str,
+        assigned_at: Optional[str] = None,
         completed_at: Optional[str] = None
     ) -> bool:
         """
@@ -262,65 +451,80 @@ class DatabaseManager:
         
         Args:
             task_id: 任务ID
-            status: 新状态（assigned/completed/failed）
+            status: 新状态（pending/assigned/completed/failed）
+            assigned_at: 分配时间
             completed_at: 完成时间
         
         Returns:
-            bool: 是否更新成功
+            是否更新成功
         """
         with self.get_connection() as conn:
             cursor = conn.cursor()
+            cursor.execute("""
+                UPDATE task_queue 
+                SET status = ?, assigned_at = ?, completed_at = ?
+                WHERE task_id = ?
+            """, (status, assigned_at, completed_at, task_id))
             
-            if status == "assigned":
-                cursor.execute("""
-                    UPDATE task_queue
-                    SET status = ?, assigned_at = CURRENT_TIMESTAMP
-                    WHERE task_id = ?
-                """, (status, task_id))
-            elif status in ["completed", "failed"]:
-                cursor.execute("""
-                    UPDATE task_queue
-                    SET status = ?, completed_at = ?
-                    WHERE task_id = ?
-                """, (status, completed_at or datetime.now().strftime("%Y-%m-%d %H:%M:%S"), task_id))
-            else:
-                cursor.execute("""
-                    UPDATE task_queue
-                    SET status = ?
-                    WHERE task_id = ?
-                """, (status, task_id))
-            
-            conn.commit()
-            return cursor.rowcount > 0
+            success = cursor.rowcount > 0
+            if success:
+                logger.info(f"更新任务状态: {task_id} -> {status}")
+            return success
     
-    def delete_task(self, task_id: str) -> bool:
+    def delete_task_from_queue(self, task_id: str) -> bool:
         """
-        删除任务
+        从队列中删除任务
         
         Args:
             task_id: 任务ID
         
         Returns:
-            bool: 是否删除成功
+            是否删除成功
         """
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("DELETE FROM task_queue WHERE task_id = ?", (task_id,))
-            conn.commit()
-            return cursor.rowcount > 0
+            
+            success = cursor.rowcount > 0
+            if success:
+                logger.info(f"删除任务: {task_id}")
+            return success
     
-    def clear_completed_tasks(self) -> int:
+    def delete_task(self, task_id: str) -> bool:
         """
-        清除已完成的任务
+        删除任务（别名方法）
+        
+        Args:
+            task_id: 任务ID
         
         Returns:
-            int: 清除的任务数量
+            是否删除成功
+        """
+        return self.delete_task_from_queue(task_id)
+    
+    def clear_completed_tasks(self, days: int = 1) -> int:
+        """
+        清理已完成的任务
+        
+        Args:
+            days: 清理N天前的任务
+        
+        Returns:
+            删除的任务数量
         """
         with self.get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute("DELETE FROM task_queue WHERE status IN ('completed', 'failed')")
-            conn.commit()
-            return cursor.rowcount
+            cutoff_date = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d %H:%M:%S")
+            
+            cursor.execute("""
+                DELETE FROM task_queue 
+                WHERE status IN ('completed', 'failed') 
+                AND completed_at < ?
+            """, (cutoff_date,))
+            
+            count = cursor.rowcount
+            logger.info(f"清理已完成任务: {count} 条")
+            return count
     
     # ==================== 报警日志相关 ====================
     
@@ -332,7 +536,7 @@ class DatabaseManager:
         record_id: Optional[int] = None
     ) -> int:
         """
-        添加报警记录
+        添加报警日志
         
         Args:
             alert_level: 报警级别（warning/danger）
@@ -341,7 +545,7 @@ class DatabaseManager:
             record_id: 关联的任务记录ID
         
         Returns:
-            int: 记录ID
+            报警日志ID
         """
         with self.get_connection() as conn:
             cursor = conn.cursor()
@@ -350,23 +554,30 @@ class DatabaseManager:
                 (record_id, alert_level, alert_type, message)
                 VALUES (?, ?, ?, ?)
             """, (record_id, alert_level, alert_type, message))
-            conn.commit()
-            return cursor.lastrowid
+            
+            alert_id = cursor.lastrowid
+            logger.info(f"添加报警日志: ID={alert_id}, 级别={alert_level}")
+            return alert_id
     
-    def get_unhandled_alerts(self) -> List[Dict[str, Any]]:
+    def get_unhandled_alerts(self, limit: int = 50) -> List[Dict[str, Any]]:
         """
         获取未处理的报警
         
+        Args:
+            limit: 返回条数
+        
         Returns:
-            List[Dict]: 报警列表
+            报警列表
         """
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("""
-                SELECT * FROM alert_log
+                SELECT * FROM alert_log 
                 WHERE handled = 0
                 ORDER BY timestamp DESC
-            """)
+                LIMIT ?
+            """, (limit,))
+            
             rows = cursor.fetchall()
             return [dict(row) for row in rows]
     
@@ -378,236 +589,156 @@ class DatabaseManager:
             alert_id: 报警ID
         
         Returns:
-            bool: 是否标记成功
+            是否更新成功
         """
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("""
-                UPDATE alert_log
+                UPDATE alert_log 
                 SET handled = 1
                 WHERE id = ?
             """, (alert_id,))
-            conn.commit()
+            
             return cursor.rowcount > 0
     
     # ==================== 小车状态相关 ====================
     
     def update_cart_status(
         self,
-        online: bool,
+        online: bool = True,
         current_station: Optional[int] = None,
-        mode: Optional[str] = None,
+        mode: str = "idle",
         battery_level: Optional[int] = None,
         last_activity: Optional[str] = None
-    ) -> bool:
+    ) -> int:
         """
-        更新小车状态（更新最新一条记录）
+        更新小车状态
         
         Args:
             online: 是否在线
             current_station: 当前站点
             mode: 运行模式
             battery_level: 电池电量
-            last_activity: 最后活动
+            last_activity: 最近活动
         
         Returns:
-            bool: 是否更新成功
-        """
-        with self.get_connection() as conn:
-            cursor = conn.cursor()
-            
-            # 构建更新字段
-            updates = ["online = ?"]
-            params = [1 if online else 0]
-            
-            if current_station is not None:
-                updates.append("current_station = ?")
-                params.append(current_station)
-            
-            if mode is not None:
-                updates.append("mode = ?")
-                params.append(mode)
-            
-            if battery_level is not None:
-                updates.append("battery_level = ?")
-                params.append(battery_level)
-            
-            if last_activity is not None:
-                updates.append("last_activity = ?")
-                params.append(last_activity)
-            
-            updates.append("timestamp = CURRENT_TIMESTAMP")
-            
-            # 获取最新记录ID
-            cursor.execute("SELECT id FROM cart_status ORDER BY id DESC LIMIT 1")
-            row = cursor.fetchone()
-            
-            if row:
-                # 更新现有记录
-                record_id = row[0]
-                params.append(record_id)
-                cursor.execute(f"""
-                    UPDATE cart_status
-                    SET {', '.join(updates)}
-                    WHERE id = ?
-                """, params)
-            else:
-                # 插入新记录
-                cursor.execute("""
-                    INSERT INTO cart_status 
-                    (online, current_station, mode, battery_level, last_activity)
-                    VALUES (?, ?, ?, ?, ?)
-                """, (
-                    1 if online else 0,
-                    current_station,
-                    mode or 'idle',
-                    battery_level,
-                    last_activity
-                ))
-            
-            conn.commit()
-            return True
-    
-    def get_cart_status(self) -> Optional[Dict[str, Any]]:
-        """
-        获取当前小车状态
-        
-        Returns:
-            Dict: 小车状态，不存在返回None
+            状态记录ID
         """
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("""
-                SELECT * FROM cart_status
-                ORDER BY id DESC
+                INSERT INTO cart_status 
+                (online, current_station, mode, battery_level, last_activity)
+                VALUES (?, ?, ?, ?, ?)
+            """, (online, current_station, mode, battery_level, last_activity))
+            
+            return cursor.lastrowid
+    
+    def get_latest_cart_status(self) -> Optional[Dict[str, Any]]:
+        """
+        获取最新的小车状态
+        
+        Returns:
+            状态字典或None
+        """
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT * FROM cart_status 
+                ORDER BY timestamp DESC 
                 LIMIT 1
             """)
+            
             row = cursor.fetchone()
             return dict(row) if row else None
     
+    def get_cart_status(self) -> Optional[Dict[str, Any]]:
+        """
+        获取最新的小车状态（别名方法）
+        
+        Returns:
+            状态字典或None
+        """
+        return self.get_latest_cart_status()
+    
     # ==================== 数据清理相关 ====================
     
-    def cleanup_old_records(
-        self,
-        image_retention_days: int = 30,
-        record_retention_days: int = 90
-    ) -> Tuple[int, int]:
+    def cleanup_old_records(self, days: int = 90) -> int:
         """
-        清理过期数据
+        清理旧的任务记录
         
         Args:
-            image_retention_days: 图片保留天数
-            record_retention_days: 记录保留天数
+            days: 保留天数
         
         Returns:
-            Tuple[int, int]: (删除的记录数, 删除的报警数)
+            删除的记录数量
         """
         with self.get_connection() as conn:
             cursor = conn.cursor()
+            cutoff_date = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d %H:%M:%S")
             
-            # 计算截止日期
-            cutoff_date = (
-                datetime.now() - timedelta(days=record_retention_days)
-            ).strftime("%Y-%m-%d")
-            
-            # 删除旧的任务记录
             cursor.execute("""
-                DELETE FROM task_records
-                WHERE DATE(timestamp) < ?
+                DELETE FROM task_records 
+                WHERE created_at < ?
             """, (cutoff_date,))
-            deleted_records = cursor.rowcount
             
-            # 删除旧的报警日志
-            cursor.execute("""
-                DELETE FROM alert_log
-                WHERE DATE(timestamp) < ?
-            """, (cutoff_date,))
-            deleted_alerts = cursor.rowcount
-            
-            conn.commit()
-            
-            return deleted_records, deleted_alerts
+            count = cursor.rowcount
+            logger.info(f"清理旧记录: {count} 条")
+            return count
     
-    # ==================== 统计相关 ====================
-    
-    def get_statistics(self) -> Dict[str, Any]:
-        """
-        获取系统统计信息
-        
-        Returns:
-            Dict: 统计信息
-        """
+    def vacuum_database(self):
+        """优化数据库（执行VACUUM）"""
         with self.get_connection() as conn:
-            cursor = conn.cursor()
-            
-            stats = {}
-            
-            # 总任务数
-            cursor.execute("SELECT COUNT(*) FROM task_records")
-            stats['total_tasks'] = cursor.fetchone()[0]
-            
-            # 今日任务数
-            cursor.execute("""
-                SELECT COUNT(*) FROM task_records
-                WHERE DATE(timestamp) = DATE('now')
-            """)
-            stats['today_tasks'] = cursor.fetchone()[0]
-            
-            # 待处理任务数
-            cursor.execute("""
-                SELECT COUNT(*) FROM task_queue
-                WHERE status = 'pending'
-            """)
-            stats['pending_tasks'] = cursor.fetchone()[0]
-            
-            # 未处理报警数
-            cursor.execute("""
-                SELECT COUNT(*) FROM alert_log
-                WHERE handled = 0
-            """)
-            stats['unhandled_alerts'] = cursor.fetchone()[0]
-            
-            # 各类型任务统计
-            cursor.execute("""
-                SELECT task_type, COUNT(*) as count
-                FROM task_records
-                GROUP BY task_type
-            """)
-            stats['task_type_stats'] = {row[0]: row[1] for row in cursor.fetchall()}
-            
-            return stats
+            conn.execute("VACUUM")
+            logger.info("数据库优化完成")
 
 
-# 便捷函数
-def get_db_manager() -> DatabaseManager:
-    """获取数据库管理器实例"""
-    return DatabaseManager()
-
+# 为了兼容导入
+import uuid
 
 if __name__ == "__main__":
-    # 测试数据库管理器
+    # 简单测试
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s [%(levelname)s] %(message)s',
+        datefmt='%Y-%m-%d %H:%M:%S'
+    )
+    
     try:
-        db = get_db_manager()
-        print("[OK] 数据库管理器初始化成功")
+        db = DatabaseManager()
+        logger.info("数据库管理器初始化成功")
         
-        # 测试统计功能
-        stats = db.get_statistics()
-        print("\n系统统计:")
-        print(f"  总任务数: {stats['total_tasks']}")
-        print(f"  今日任务数: {stats['today_tasks']}")
-        print(f"  待处理任务: {stats['pending_tasks']}")
-        print(f"  未处理报警: {stats['unhandled_alerts']}")
+        # 测试添加任务记录
+        task_id = "test-" + str(uuid.uuid4())
+        record_id = db.add_task_record(
+            task_id=task_id,
+            task_type=1,
+            station_id=1,
+            result_data={"value": 1.5, "unit": "MPa"},
+            status="normal",
+            confidence=0.95
+        )
+        logger.info(f"添加任务记录成功: ID={record_id}")
         
-        # 测试小车状态
-        cart_status = db.get_cart_status()
-        if cart_status:
-            print("\n小车状态:")
-            print(f"  在线: {'是' if cart_status['online'] else '否'}")
-            print(f"  当前站点: {cart_status['current_station']}")
-            print(f"  运行模式: {cart_status['mode']}")
-            print(f"  电池电量: {cart_status['battery_level']}%")
+        # 测试查询
+        records = db.get_task_records(limit=5)
+        logger.info(f"查询任务记录: {len(records)} 条")
         
-    except FileNotFoundError as e:
-        print(f"[失败] {e}")
-        print("请先运行: python scripts/init_database.py")
+        # 测试添加任务队列
+        queue_task_id = db.add_task_to_queue(
+            station_id=1,
+            task_type=1,
+            priority="high"
+        )
+        logger.info(f"添加任务到队列: {queue_task_id}")
+        
+        # 测试获取待执行任务
+        pending = db.get_pending_tasks()
+        logger.info(f"待执行任务: {len(pending)} 条")
+        
+        logger.info("数据库测试完成!")
+        
+    except Exception as e:
+        logger.error(f"测试失败: {e}")
+        raise
 
