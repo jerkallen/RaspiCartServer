@@ -289,6 +289,21 @@ body {
 
 .log-entry.log-error {
     color: var(--danger-color);
+    font-weight: bold;
+    background: rgba(231, 76, 60, 0.1);
+    padding: 6px;
+    border-radius: 3px;
+    animation: logErrorBlink 1.5s ease-in-out 3;
+}
+
+/* 错误日志闪烁动画 - 只闪烁3次 */
+@keyframes logErrorBlink {
+    0%, 100% {
+        background: rgba(231, 76, 60, 0.1);
+    }
+    50% {
+        background: rgba(231, 76, 60, 0.25);
+    }
 }
 
 /* 主内容区域 */
@@ -327,6 +342,23 @@ body {
     box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4);
 }
 
+/* 危险状态的任务面板 - 醒目提醒 */
+.task-panel.danger {
+    border: 3px solid var(--danger-color);
+    box-shadow: 0 0 30px rgba(231, 76, 60, 0.6), 0 4px 20px rgba(0, 0, 0, 0.3);
+    animation: dangerGlow 2s ease-in-out infinite;
+}
+
+/* 危险面板呼吸灯效果 */
+@keyframes dangerGlow {
+    0%, 100% {
+        box-shadow: 0 0 30px rgba(231, 76, 60, 0.6), 0 4px 20px rgba(0, 0, 0, 0.3);
+    }
+    50% {
+        box-shadow: 0 0 50px rgba(231, 76, 60, 0.9), 0 4px 20px rgba(0, 0, 0, 0.3);
+    }
+}
+
 .panel-header {
     display: flex;
     justify-content: space-between;
@@ -362,6 +394,20 @@ body {
 .panel-status.danger {
     background: var(--danger-color);
     color: white;
+    animation: dangerPulse 1.5s ease-in-out infinite;
+    box-shadow: 0 0 15px var(--danger-color);
+}
+
+/* 危险状态闪烁动画 */
+@keyframes dangerPulse {
+    0%, 100% {
+        transform: scale(1);
+        opacity: 1;
+    }
+    50% {
+        transform: scale(1.1);
+        opacity: 0.8;
+    }
 }
 
 /* 图表容器 - 左侧，跨两行 */
@@ -582,6 +628,24 @@ body {
 
 .notification.danger {
     border-left-color: var(--danger-color);
+    background: rgba(231, 76, 60, 0.2);
+    border: 2px solid var(--danger-color);
+    font-size: 16px;
+    font-weight: bold;
+    animation: slideIn 0.3s ease, dangerNotificationPulse 1.5s ease-in-out infinite 0.5s;
+    box-shadow: 0 4px 20px rgba(231, 76, 60, 0.5);
+}
+
+/* 危险通知闪烁动画 */
+@keyframes dangerNotificationPulse {
+    0%, 100% {
+        transform: translateX(0) scale(1);
+        box-shadow: 0 4px 20px rgba(231, 76, 60, 0.5);
+    }
+    50% {
+        transform: translateX(0) scale(1.05);
+        box-shadow: 0 4px 30px rgba(231, 76, 60, 0.8);
+    }
 }
 
 @keyframes slideIn {

@@ -6,13 +6,25 @@ import sys
 import subprocess
 import signal
 import time
+import logging
 from pathlib import Path
 
 # 项目根目录
 project_root = Path(__file__).parent
 
+# 添加项目根目录到路径（用于导入 scripts 模块）
+sys.path.insert(0, str(project_root))
+
 # 子进程列表
 processes = []
+
+# 配置日志
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s [%(levelname)s] %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
+logger = logging.getLogger(__name__)
 
 
 def signal_handler(sig, frame):
@@ -30,6 +42,50 @@ def signal_handler(sig, frame):
     
     print("所有服务已关闭")
     sys.exit(0)
+
+
+def init_database():
+    """初始化数据库（仅当数据库不存在时）"""
+    db_path = project_root / "data" / "database" / "inspection.db"
+    
+    # 检查数据库文件是否存在
+    if db_path.exists():
+        logger.info(f"数据库已存在: {db_path}")
+        return
+    
+    print("="*60)
+    print("数据库不存在，正在初始化...")
+    print("="*60)
+    
+    try:
+        from scripts.db_manager import DatabaseManager
+        
+        # 创建数据库管理器（会自动创建表）
+        db = DatabaseManager()
+        logger.info("数据库初始化成功")
+        
+        # 检查表是否存在
+        with db.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT name FROM sqlite_master 
+                WHERE type='table'
+                ORDER BY name
+            """)
+            tables = cursor.fetchall()
+            
+            logger.info(f"已创建数据表: {len(tables)} 个")
+            for table in tables:
+                logger.info(f"  - {table[0]}")
+        
+        print("="*60)
+        print()
+        
+    except Exception as e:
+        logger.error(f"数据库初始化失败: {e}")
+        print("警告: 数据库初始化失败，但服务将继续启动")
+        print("="*60)
+        print()
 
 
 def start_backend():
@@ -107,6 +163,9 @@ def main():
     signal.signal(signal.SIGINT, signal_handler)
     if sys.platform != "win32":
         signal.signal(signal.SIGTERM, signal_handler)
+    
+    # 初始化数据库
+    init_database()
     
     # 启动后端服务
     backend_proc = start_backend()

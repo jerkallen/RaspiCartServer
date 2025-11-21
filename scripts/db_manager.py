@@ -314,6 +314,74 @@ class DatabaseManager:
             
             return None
     
+    def update_task_record(
+        self,
+        record_id: int,
+        result_data: Optional[Dict[str, Any]] = None,
+        image_path: Optional[str] = None,
+        status: Optional[str] = None,
+        confidence: Optional[float] = None,
+        processing_time: Optional[float] = None
+    ) -> bool:
+        """
+        更新任务记录
+        
+        Args:
+            record_id: 记录ID
+            result_data: 结果数据（字典）
+            image_path: 图片路径
+            status: 状态（normal/warning/danger/processing/failed）
+            confidence: 置信度
+            processing_time: 处理时间
+        
+        Returns:
+            是否更新成功
+        """
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            
+            # 构建更新语句
+            updates = []
+            params = []
+            
+            if result_data is not None:
+                updates.append("result_data = ?")
+                params.append(json.dumps(result_data, ensure_ascii=False))
+            
+            if image_path is not None:
+                updates.append("image_path = ?")
+                params.append(image_path)
+            
+            if status is not None:
+                updates.append("status = ?")
+                params.append(status)
+            
+            if confidence is not None:
+                updates.append("confidence = ?")
+                params.append(confidence)
+            
+            if processing_time is not None:
+                updates.append("processing_time = ?")
+                params.append(processing_time)
+            
+            if not updates:
+                logger.warning(f"更新任务记录时没有提供任何字段: record_id={record_id}")
+                return False
+            
+            # 添加记录ID到参数
+            params.append(record_id)
+            
+            query = f"UPDATE task_records SET {', '.join(updates)} WHERE id = ?"
+            cursor.execute(query, params)
+            
+            updated = cursor.rowcount > 0
+            if updated:
+                logger.info(f"更新任务记录成功: record_id={record_id}")
+            else:
+                logger.warning(f"更新任务记录失败（记录不存在）: record_id={record_id}")
+            
+            return updated
+    
     def get_statistics(
         self,
         task_type: Optional[int] = None,

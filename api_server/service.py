@@ -15,6 +15,7 @@ import base64
 from io import BytesIO
 import sys
 import time
+import requests
 from concurrent.futures import ThreadPoolExecutor
 
 from loader import get_all_active_projects, format_response
@@ -119,10 +120,10 @@ class InspectionAPIService:
         station_id: int,
         project_name: str,
         extra_params: dict,
-        task_id: Optional[str] = None
+        record_id: int
     ):
         """
-        后台处理任务的函数
+        后台处理任务的函数（仅负责图片识别和更新结果）
         
         Args:
             image_bytes: 图片字节数据
@@ -130,7 +131,7 @@ class InspectionAPIService:
             station_id: 站点ID
             project_name: 项目名称
             extra_params: 额外参数
-            task_id: 任务ID（可选）
+            record_id: 数据库记录ID（用于后续更新结果）
         """
         try:
             # 重新打开图片（在新线程中）
@@ -149,7 +150,7 @@ class InspectionAPIService:
                 **extra_params
             }
             
-            logger.info(f"[后台处理] 开始处理 -> 任务类型: {task_type}, 站点ID: {station_id}")
+            logger.info(f"[后台处理] 开始处理 -> 任务类型: {task_type}, 站点ID: {station_id}, 记录ID: {record_id}")
             
             # 调用处理器
             project_info = self.projects[project_name]
@@ -160,7 +161,7 @@ class InspectionAPIService:
             status = result.get("status", "unknown")
             logger.info(f"[后台处理] 处理完成 -> 任务类型: {task_type}, 站点ID: {station_id}, 状态: {status}")
             
-            # 保存到数据库
+            # 更新数据库记录
             if self.db and status == "success":
                 try:
                     # 提取结果数据
@@ -173,39 +174,120 @@ class InspectionAPIService:
                     item_status = result_info.get("status", "normal")
                     confidence = result_info.get("confidence", None)
                     
-                    # 生成任务ID（如果没有提供）
-                    task_record_id = task_id if task_id else f"task_{task_type}_{station_id}_{int(time.time())}"
-                    
-                    # 保存任务记录
-                    record_id = self.db.add_task_record(
-                        task_id=task_record_id,
-                        task_type=task_type,
-                        station_id=station_id,
+                    # 更新任务记录
+                    self.db.update_task_record(
+                        record_id,
                         result_data=result_info,
                         image_path=image_path,
                         status=item_status,
                         confidence=confidence,
                         processing_time=processing_time
                     )
+                    logger.info(f"[后台处理] 任务记录已更新 -> record_id: {record_id}")
                     
-                    logger.info(f"[后台处理] 任务记录已保存到数据库: record_id={record_id}")
+                    # 通知Web服务推送WebSocket消息
+                    self._notify_web_service({
+                        'task_type': task_type,
+                        'station_id': station_id,
+                        'result': result_info,
+                        'image_path': image_path,
+                        'timestamp': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    })
                     
                 except Exception as db_error:
-                    logger.error(f"[后台处理] 保存到数据库失败: {db_error}")
-            
-            # 如果处理成功且提供了task_id，从任务队列中删除该任务
-            if status == "success" and task_id and self.db:
+                    logger.error(f"[后台处理] 更新数据库失败 -> record_id: {record_id}, 错误: {db_error}")
+                    # 更新失败时，标记为处理失败
+                    try:
+                        self.db.update_task_record(record_id, status="failed")
+                    except:
+                        pass
+            elif status != "success":
+                # 处理失败，更新状态
                 try:
-                    deleted = self.db.delete_task_from_queue(task_id)
-                    if deleted:
-                        logger.info(f"[后台处理] 任务已从队列删除 -> task_id: {task_id}")
-                    else:
-                        logger.warning(f"[后台处理] 任务删除失败（可能不存在）-> task_id: {task_id}")
+                    error_info = result.get("error", "未知错误")
+                    self.db.update_task_record(
+                        record_id,
+                        status="failed",
+                        result_data={'error': error_info}
+                    )
+                    logger.warning(f"[后台处理] 任务处理失败，已更新状态 -> record_id: {record_id}")
                 except Exception as e:
-                    logger.error(f"[后台处理] 删除任务时出错 -> task_id: {task_id}, 错误: {e}")
+                    logger.error(f"[后台处理] 更新失败状态时出错: {e}")
             
         except Exception as e:
-            logger.error(f"[后台处理] 处理失败 -> 任务类型: {task_type}, 错误: {str(e)}")
+            logger.error(f"[后台处理] 处理异常 -> 任务类型: {task_type}, 错误: {str(e)}")
+            # 发生异常时，标记为失败
+            if self.db:
+                try:
+                    self.db.update_task_record(
+                        record_id,
+                        status="failed",
+                        result_data={'error': str(e)}
+                    )
+                except:
+                    pass
+    
+    def _notify_web_service(self, task_data: Dict[str, Any]):
+        """
+        通知Web服务推送WebSocket消息
+        
+        Args:
+            task_data: 任务数据
+        """
+        try:
+            # Web服务的通知接口URL（默认在5000端口）
+            web_notify_url = "http://127.0.0.1:5000/api/notify/task_result"
+            
+            response = requests.post(
+                web_notify_url,
+                json=task_data,
+                timeout=5
+            )
+            
+            if response.status_code == 200:
+                logger.info(f"[WebSocket通知] ✅ 已通知Web服务推送消息 -> 任务类型: {task_data.get('task_type')}, 状态: {task_data.get('result', {}).get('status', 'unknown')}")
+            else:
+                logger.warning(f"[WebSocket通知] ⚠️ Web服务响应异常 -> 状态码: {response.status_code}, 响应: {response.text}")
+                
+        except requests.exceptions.Timeout:
+            logger.warning(f"[WebSocket通知] 通知Web服务超时")
+        except requests.exceptions.ConnectionError:
+            logger.warning(f"[WebSocket通知] 无法连接到Web服务")
+        except Exception as e:
+            logger.error(f"[WebSocket通知] 通知失败: {e}")
+    
+    def _notify_task_queue_update(self, action: str, task_id: str):
+        """
+        通知Web服务任务队列已更新
+        
+        Args:
+            action: 操作类型（add/delete/complete）
+            task_id: 任务ID
+        """
+        try:
+            # Web服务的任务队列更新通知接口URL
+            web_notify_url = "http://127.0.0.1:5000/api/notify/task_queue_update"
+            
+            response = requests.post(
+                web_notify_url,
+                json={
+                    "action": action,
+                    "task_id": task_id
+                },
+                timeout=3
+            )
+            
+            if response.status_code == 200:
+                logger.info(f"[任务队列通知] ✅ 已通知Web服务 -> 操作: {action}, task_id: {task_id}")
+            else:
+                logger.warning(f"[任务队列通知] ⚠️ Web服务响应异常 -> 状态码: {response.status_code}")
+                
+        except requests.exceptions.Timeout:
+            logger.warning(f"[任务队列通知] 通知Web服务超时")
+        except requests.exceptions.ConnectionError:
+            logger.warning(f"[任务队列通知] 无法连接到Web服务")
+        except Exception as e:
+            logger.warning(f"[任务队列通知] 通知失败: {e}")
     
     @bentoml.api(route="/health")
     def health(self) -> Dict[str, Any]:
@@ -228,21 +310,26 @@ class InspectionAPIService:
         task_id: Optional[str] = None
     ) -> Dict[str, Any]:
         """
-        统一处理路由（异步模式）
+        统一处理路由（稳妥的异步模式）
         
-        接收图片后立即返回success，实际处理在后台线程中进行
+        流程：
+        1. 验证图片和参数
+        2. 从任务队列中删除任务（如果提供了task_id）
+        3. 创建数据库记录（标记为processing）
+        4. 返回成功响应
+        5. 后台线程处理图片识别并更新结果
         
         Args:
             image_base64: base64编码的图片
             task_type: 任务类型（1-4）
             station_id: 站点ID
             params: 额外参数（JSON字符串）
-            task_id: 任务ID（可选，如果提供则在处理成功后从队列中删除）
+            task_id: 任务ID（可选，从队列中获取的任务ID）
         
         Returns:
             立即返回接收成功的响应
         """
-        # 解码base64图片
+        # ========== 第1步：验证图片 ==========
         try:
             img_data = base64.b64decode(image_base64)
             # 验证图片是否可以打开
@@ -299,27 +386,72 @@ class InspectionAPIService:
                     error_code="INVALID_JSON"
                 )
         
-        # 提交后台处理任务
-        self.executor.submit(
-            self._process_task_in_background,
-            img_data,  # 传递原始字节数据
-            task_type,
-            station_id,
-            project_name,
-            extra_params,
-            task_id
-        )
+        # ========== 第2步：从任务队列中删除任务（如果提供了task_id）==========
+        if task_id and self.db:
+            try:
+                deleted = self.db.delete_task_from_queue(task_id)
+                if deleted:
+                    logger.info(f"✅ 任务已从队列删除 -> task_id: {task_id}")
+                    # 通知Web服务任务队列已更新
+                    self._notify_task_queue_update("delete", task_id)
+                else:
+                    logger.warning(f"⚠️ 任务不在队列中（可能已被删除）-> task_id: {task_id}")
+            except Exception as e:
+                logger.error(f"❌ 从队列删除任务时出错 -> task_id: {task_id}, 错误: {e}")
+                # 即使删除失败，也继续处理（可能是任务不存在）
         
-        logger.info(f"任务已提交到后台处理队列 -> 任务类型: {task_type}, 站点ID: {station_id}")
+        # ========== 第3步：创建数据库记录（标记为processing）==========
+        record_id = None
+        if self.db:
+            try:
+                # 生成任务记录ID（如果没有提供task_id，则生成一个）
+                task_record_id = task_id if task_id else f"task_{task_type}_{station_id}_{int(time.time())}"
+                
+                # 创建初始记录（状态为processing）
+                record_id = self.db.add_task_record(
+                    task_id=task_record_id,
+                    task_type=task_type,
+                    station_id=station_id,
+                    result_data={'message': '正在处理中'},
+                    image_path="",  # 稍后由后台处理器更新
+                    status="processing",
+                    confidence=None,
+                    processing_time=0
+                )
+                
+                logger.info(f"✅ 任务记录已创建 -> record_id: {record_id}, task_id: {task_record_id}")
+                
+            except Exception as db_error:
+                logger.error(f"❌ 创建任务记录失败: {db_error}")
+                # 如果数据库失败，返回错误（因为无法追踪任务）
+                return format_response(
+                    "error",
+                    error=f"创建任务记录失败: {str(db_error)}",
+                    error_code="DATABASE_ERROR"
+                )
         
-        # 立即返回成功响应
+        # ========== 第4步：提交后台处理任务 ==========
+        if record_id:
+            self.executor.submit(
+                self._process_task_in_background,
+                img_data,  # 传递原始字节数据
+                task_type,
+                station_id,
+                project_name,
+                extra_params,
+                record_id  # 传递记录ID用于后续更新
+            )
+            logger.info(f"📤 任务已提交到后台处理 -> record_id: {record_id}")
+        
+        # ========== 第5步：返回成功响应 ==========
         return format_response(
             "success",
             data={
-                "message": "图片已接收，正在后台处理",
+                "message": "任务已接收并从队列移除，正在后台处理",
                 "task_type": task_type,
                 "station_id": station_id,
                 "task_id": task_id,
+                "record_id": record_id,
                 "status": "processing",
                 "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             }

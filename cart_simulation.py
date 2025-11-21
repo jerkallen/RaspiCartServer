@@ -8,13 +8,16 @@
 4. 执行任务并上传图片/数据到服务端
 5. 任务完成后自动从队列删除
 6. 重新获取任务列表
-7. 重复步骤2-6，直到所有任务完成
+7. 重复步骤2-6，根据运行模式决定是否继续
 
 特点：
 - 任务列表由服务端管理，动态读取
 - 支持任意数量的任务
 - 支持任意站点和任务类型组合
 - 每完成一个任务，自动从队列中移除
+- 支持两种运行模式：
+  * 单圈模式：完成所有任务后自动停止（适用于一次性巡检）
+  * 循环模式：持续运行，任务完成后等待新任务（适用于长期监控）
 """
 
 import requests
@@ -23,8 +26,15 @@ import json
 import os
 import base64
 from pathlib import Path
+from datetime import datetime
 
 # ==================== 配置区域 ====================
+
+# 运行模式配置
+# RUN_MODE = "单圈模式"  # 可选: "单圈模式" 或 "循环模式"
+RUN_MODE = "循环模式"  # 可选: "单圈模式" 或 "循环模式"
+# - 单圈模式: 完成所有任务后自动停止（适用于一次性巡检）
+# - 循环模式: 持续循环运行，任务完成后等待新任务（适用于长期监控）
 
 # 服务端IP配置（根据实际情况修改）
 # 选项1: 局域网内的本地电脑（例如：'192.168.1.100'）
@@ -39,6 +49,7 @@ API_PORT = 3000  # API服务端口（上传结果）
 # 构造URL
 TASK_URL = f'http://{SERVER_IP}:{WEB_PORT}/api/tasks'
 PROCESS_URL = f'http://{SERVER_IP}:{API_PORT}/api/process'
+STATUS_URL = f'http://{SERVER_IP}:{WEB_PORT}/api/cart/status'
 
 # 测试图片路径（项目根目录下）
 PROJECT_ROOT = Path(__file__).parent
@@ -54,6 +65,9 @@ TRAVEL_TIME = 5
 
 # 请求超时时间（秒）
 REQUEST_TIMEOUT = 30
+
+# 循环模式等待时间（秒）
+LOOP_WAIT_TIME = 5  # 循环模式下无任务时的等待时间
 
 # ==================== 辅助函数 ====================
 
@@ -185,18 +199,72 @@ def upload_task_result(station_id, task_type, image_path, params=None, task_id=N
         print(f"❌ 发生异常: {e}")
         return None
 
-def simulate_travel(station_id):
+def update_cart_status(online=True, current_station=None, mode='idle', battery_level=85):
+    """
+    更新小车状态到服务器
+    
+    参数:
+        online: 是否在线
+        current_station: 当前站点
+        mode: 运行模式 (idle/single/loop/traveling/working)
+        battery_level: 电池电量
+    """
+    try:
+        data = {
+            'online': online,
+            'current_station': current_station,
+            'mode': mode,
+            'battery_level': battery_level,
+            'last_activity': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        }
+        
+        response = requests.post(
+            STATUS_URL,
+            json=data,
+            timeout=5
+        )
+        
+        if response.status_code == 200:
+            return True
+        else:
+            print(f"   ⚠️  状态更新失败: HTTP {response.status_code}")
+            return False
+            
+    except Exception as e:
+        print(f"   ⚠️  状态更新异常: {e}")
+        return False
+
+def simulate_travel(station_id, battery_level=85):
     """
     模拟小车行驶到指定站点
     
     参数:
         station_id: 目标站点ID
+        battery_level: 当前电池电量
     """
     print(f"\n🚗 小车正在巡线前往站点 {station_id}...")
+    
+    # 更新状态：行驶中
+    mode = 'single' if RUN_MODE == '单圈模式' else 'loop'
+    update_cart_status(
+        online=True, 
+        current_station=None, 
+        mode='traveling',
+        battery_level=battery_level
+    )
+    
     for i in range(TRAVEL_TIME, 0, -1):
         print(f"   ⏱️  还需 {i} 秒到达...", end='\r')
         time.sleep(1)
     print(f"   🛑 已到达站点 {station_id}！      ")
+    
+    # 更新状态：到达站点，工作中
+    update_cart_status(
+        online=True,
+        current_station=station_id,
+        mode='working',
+        battery_level=battery_level - 2  # 行驶消耗一点电量
+    )
 
 # ==================== 主测试流程 ====================
 
@@ -269,6 +337,11 @@ def main():
     print("\n" + "=" * 60)
     print("🤖 智能巡检小车模拟测试程序")
     print("=" * 60)
+    print(f"🔧 运行模式: {RUN_MODE}")
+    if RUN_MODE == "单圈模式":
+        print("   - 完成所有任务后自动停止")
+    else:
+        print("   - 持续循环，等待新任务")
     print(f"📡 服务端配置:")
     print(f"   - IP地址: {SERVER_IP}")
     print(f"   - Web端口: {WEB_PORT} (获取任务)")
@@ -294,9 +367,19 @@ def main():
     step_num = 1
     completed_count = 0
     failed_count = 0
+    battery_level = 100  # 初始电量100%
     
     print_step(step_num, "小车启动，获取任务列表")
     step_num += 1
+    
+    # 更新小车状态：启动，在线
+    mode = 'single' if RUN_MODE == '单圈模式' else 'loop'
+    update_cart_status(
+        online=True,
+        current_station=None,
+        mode=mode,
+        battery_level=battery_level
+    )
     
     while True:
         # 获取当前任务列表
@@ -318,8 +401,27 @@ def main():
         print(f"\n📋 当前任务队列: {task_count} 个任务")
         
         if task_count == 0:
-            print("\n🎉🎉🎉 所有任务已完成，巡检结束！")
-            break
+            if RUN_MODE == "单圈模式":
+                print("\n🎉🎉🎉 所有任务已完成，巡检结束！")
+                # 更新状态：完成，待机
+                update_cart_status(
+                    online=True,
+                    current_station=None,
+                    mode='idle',
+                    battery_level=battery_level
+                )
+                break
+            else:  # 循环模式
+                print(f"\n🔄 循环模式: 当前无任务，等待 {LOOP_WAIT_TIME} 秒后重新检查...")
+                # 更新状态：等待中
+                update_cart_status(
+                    online=True,
+                    current_station=None,
+                    mode='loop',
+                    battery_level=battery_level
+                )
+                time.sleep(LOOP_WAIT_TIME)
+                continue
         
         # 显示任务列表
         print("\n任务列表:")
@@ -332,8 +434,9 @@ def main():
         print_step(step_num, f"前往站点 {current_task['station_id']} 执行任务")
         step_num += 1
         
-        # 模拟行驶到站点
-        simulate_travel(current_task['station_id'])
+        # 模拟行驶到站点（消耗电量）
+        simulate_travel(current_task['station_id'], battery_level)
+        battery_level = max(20, battery_level - 3)  # 每次任务消耗3%电量，最低保持20%
         
         # 执行任务
         success = execute_task(current_task)
@@ -341,23 +444,48 @@ def main():
         if success:
             print(f"\n✅ 任务完成: 站点{current_task['station_id']}")
             completed_count += 1
+            # 更新状态：任务完成
+            mode = 'single' if RUN_MODE == '单圈模式' else 'loop'
+            update_cart_status(
+                online=True,
+                current_station=current_task['station_id'],
+                mode=mode,
+                battery_level=battery_level
+            )
         else:
             print(f"\n❌ 任务失败: 站点{current_task['station_id']}")
             failed_count += 1
         
         # 短暂延迟后继续下一个任务
-        if task_count > 1:
-            print("\n⏱️  准备执行下一个任务...")
+        remaining_tasks = task_count - 1  # 当前任务已完成，剩余任务数
+        if remaining_tasks > 0:
+            print(f"\n⏱️  准备执行下一个任务... (剩余 {remaining_tasks} 个任务)")
+            time.sleep(2)
+        elif RUN_MODE == "循环模式":
+            print("\n🔄 循环模式: 准备重新获取任务列表...")
             time.sleep(2)
     
     # ========== 测试完成统计 ==========
+    # 更新小车状态：离线
+    update_cart_status(
+        online=False,
+        current_station=None,
+        mode='idle',
+        battery_level=battery_level
+    )
+    
     print_separator()
     print("📊 测试统计:")
+    print(f"   🔧 运行模式: {RUN_MODE}")
     print(f"   ✅ 成功完成: {completed_count} 个任务")
     print(f"   ❌ 失败: {failed_count} 个任务")
     print(f"   📈 总计: {completed_count + failed_count} 个任务")
+    print(f"   🔋 剩余电量: {battery_level}%")
     print_separator()
-    print("✅ 测试流程执行完毕")
+    if RUN_MODE == "单圈模式":
+        print("✅ 单圈巡检完成")
+    else:
+        print("⏸️  循环模式已停止")
     print_separator()
 
 

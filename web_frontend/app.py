@@ -384,7 +384,15 @@ def get_statistics():
         }), 500
 
 
-@app.route('/api/cart/status', methods=['GET'])
+@app.route('/api/cart/status', methods=['GET', 'POST'])
+def cart_status_api():
+    """获取或更新小车状态"""
+    if request.method == 'GET':
+        return get_cart_status()
+    else:
+        return update_cart_status_api()
+
+
 def get_cart_status():
     """获取小车状态"""
     try:
@@ -421,6 +429,60 @@ def get_cart_status():
             "status": "error",
             "error": {
                 "code": "GET_CART_STATUS_FAILED",
+                "message": str(e)
+            }
+        }), 500
+
+
+def update_cart_status_api():
+    """更新小车状态（供小车端调用）"""
+    try:
+        if db is None:
+            return jsonify({
+                "status": "error",
+                "error": {
+                    "code": "DB_NOT_INITIALIZED",
+                    "message": "数据库未初始化"
+                }
+            }), 500
+        
+        data = request.get_json()
+        
+        # 更新数据库
+        db.update_cart_status(
+            online=data.get('online', True),
+            current_station=data.get('current_station'),
+            mode=data.get('mode', 'idle'),
+            battery_level=data.get('battery_level'),
+            last_activity=data.get('last_activity', datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+        )
+        
+        # 获取最新状态
+        cart_status = db.get_cart_status()
+        
+        logger.info(f"更新小车状态: 在线={data.get('online')}, 站点={data.get('current_station')}, 模式={data.get('mode')}")
+        
+        # 通过WebSocket推送状态更新
+        socketio.emit('cart_status', {
+            "type": "cart_status",
+            "data": cart_status
+        })
+        
+        return jsonify({
+            "status": "success",
+            "data": {
+                "message": "状态更新成功",
+                "cart_status": cart_status
+            },
+            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        })
+    
+    except Exception as e:
+        logger.error(f"更新小车状态失败: {e}")
+        return jsonify({
+            "status": "error",
+            "error": {
+                "code": "UPDATE_CART_STATUS_FAILED",
                 "message": str(e)
             }
         }), 500
@@ -512,6 +574,72 @@ def notify_alert(alert_data: Dict[str, Any]):
         "data": alert_data
     })
     logger.info(f"推送报警: 级别={alert_data.get('level')}, 消息={alert_data.get('message')}")
+
+
+@app.route('/api/notify/task_result', methods=['POST'])
+def api_notify_task_result():
+    """接收任务结果通知（供BentoML服务调用）"""
+    try:
+        task_data = request.get_json()
+        if not task_data:
+            logger.warning("收到空的任务结果通知")
+            return jsonify({
+                "status": "error",
+                "error": {"code": "INVALID_DATA", "message": "缺少任务数据"}
+            }), 400
+        
+        logger.info(f"收到任务结果通知: 任务类型={task_data.get('task_type')}, 状态={task_data.get('result', {}).get('status')}")
+        
+        # 推送WebSocket通知
+        notify_task_result(task_data)
+        
+        return jsonify({
+            "status": "success",
+            "message": "通知已推送"
+        })
+    except Exception as e:
+        logger.error(f"推送任务结果通知失败: {e}")
+        return jsonify({
+            "status": "error",
+            "error": {"code": "NOTIFY_ERROR", "message": str(e)}
+        }), 500
+
+
+@app.route('/api/notify/task_queue_update', methods=['POST'])
+def api_notify_task_queue_update():
+    """接收任务队列更新通知（供BentoML服务调用）"""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({
+                "status": "error",
+                "error": {"code": "INVALID_DATA", "message": "缺少数据"}
+            }), 400
+        
+        action = data.get('action', 'update')
+        task_id = data.get('task_id', '')
+        
+        logger.info(f"收到任务队列更新通知: 操作={action}, task_id={task_id}")
+        
+        # 推送WebSocket通知任务队列更新
+        socketio.emit('task_queue_update', {
+            "type": "task_queue_update",
+            "data": {
+                "action": action,
+                "task_id": task_id
+            }
+        })
+        
+        return jsonify({
+            "status": "success",
+            "message": "任务队列更新通知已推送"
+        })
+    except Exception as e:
+        logger.error(f"推送任务队列更新通知失败: {e}")
+        return jsonify({
+            "status": "error",
+            "error": {"code": "NOTIFY_ERROR", "message": str(e)}
+        }), 500
 
 
 # ==================== 错误处理 ====================

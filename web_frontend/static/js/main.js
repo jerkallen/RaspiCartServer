@@ -33,6 +33,11 @@ function playAlertSound(level) {
 
 // 显示通知
 function showNotification(message, type = 'info', duration = 3000) {
+    // 危险通知显示时间延长到8秒
+    if (type === 'danger') {
+        duration = 8000;
+    }
+    
     const notification = document.createElement('div');
     notification.className = `notification ${type}`;
     notification.textContent = message;
@@ -167,7 +172,18 @@ class CartStatusManager {
         // 更新详细信息
         this.updateInfo('cart-online', this.status.online ? '在线' : '离线');
         this.updateInfo('cart-station', this.status.current_station || '--');
-        this.updateInfo('cart-mode', this.status.mode || 'idle');
+        
+        // 格式化运行模式
+        const modeMap = {
+            'idle': '待机',
+            'single': '单圈模式',
+            'loop': '循环模式',
+            'traveling': '行驶中',
+            'working': '工作中'
+        };
+        const modeText = modeMap[this.status.mode] || this.status.mode || '--';
+        this.updateInfo('cart-mode', modeText);
+        
         this.updateInfo('cart-battery', this.status.battery_level ? `${this.status.battery_level}%` : '--');
         
         if (this.status.last_activity) {
@@ -187,6 +203,13 @@ class CartStatusManager {
         setInterval(() => {
             this.loadStatus();
         }, 10000);
+        
+        // 每秒更新一次相对时间显示
+        setInterval(() => {
+            if (this.status && this.status.last_activity) {
+                this.updateInfo('cart-activity', formatRelativeTime(this.status.last_activity));
+            }
+        }, 1000);
     }
 }
 
@@ -264,12 +287,29 @@ function initApp() {
             4: '烟雾监测B'
         };
         const taskName = taskNames[taskData.task_type] || '未知任务';
-        systemLogger.addLog(`${taskName}任务完成 - 站点${taskData.station_id}`, 'info');
+        const status = taskData.result?.status || 'normal';
+        
+        // 根据状态使用不同的日志级别和图标
+        if (status === 'danger') {
+            systemLogger.addLog(`🚨 ${taskName}检测到危险状态 - 站点${taskData.station_id}`, 'error');
+        } else if (status === 'warning') {
+            systemLogger.addLog(`⚠️ ${taskName}检测到警告状态 - 站点${taskData.station_id}`, 'warning');
+        } else {
+            systemLogger.addLog(`✓ ${taskName}任务完成 - 站点${taskData.station_id}`, 'info');
+        }
     });
 
     wsManager.on('alert', (data) => {
         const alertData = data.data || data;
         systemLogger.addLog(`⚠️ ${alertData.message}`, alertData.level === 'danger' ? 'error' : 'warning');
+    });
+
+    // 监听小车状态更新
+    wsManager.on('cart_status', (data) => {
+        const statusData = data.data || data;
+        cartStatusManager.status = statusData;
+        cartStatusManager.lastUpdate = new Date();
+        cartStatusManager.render();
     });
 
     console.log('[应用] 初始化完成');

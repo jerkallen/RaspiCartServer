@@ -199,6 +199,16 @@ class TaskManager {
             statusEl.className = `panel-status ${status}`;
             statusEl.textContent = status === 'normal' ? '正常' : 
                                   status === 'warning' ? '警告' : '危险';
+            
+            // 更新整个面板的状态样式,使危险状态更醒目
+            const panelEl = statusEl.closest('.task-panel');
+            if (panelEl) {
+                // 移除所有状态class
+                panelEl.classList.remove('normal', 'warning', 'danger');
+                // 添加当前状态class
+                panelEl.classList.add(status);
+                console.log(`[面板更新] 任务${taskType} 状态已更新为: ${status}`);
+            }
         }
 
         // 更新最新数据
@@ -267,7 +277,7 @@ class TaskManager {
             // 更新最新数据
             this.latestData[taskType] = {
                 result_data: taskData.result,
-                status: taskData.result.status,
+                status: taskData.result?.status || 'normal',
                 image_path: taskData.image_path,
                 timestamp: taskData.timestamp
             };
@@ -281,24 +291,33 @@ class TaskManager {
                 3: '烟雾监测A',
                 4: '烟雾监测B'
             };
-            showNotification(`${taskNames[taskType]}任务完成`, 'success');
+            const status = taskData.result.status || 'normal';
+            
+            // 根据状态显示不同类型的通知
+            if (status === 'danger') {
+                showNotification(`⚠️ 警报！${taskNames[taskType]}检测到危险状态！`, 'danger');
+            } else if (status === 'warning') {
+                showNotification(`⚠️ ${taskNames[taskType]}检测到警告状态`, 'warning');
+            } else {
+                showNotification(`${taskNames[taskType]}任务完成`, 'success');
+            }
 
             // 播放音效
-            playAlertSound(taskData.result.status || 'normal');
+            playAlertSound(status);
         }
     }
 
     // 开始自动刷新
     startAutoRefresh() {
-        // 每30秒刷新一次任务列表
+        // 每10秒刷新一次任务列表（提高实时性）
         setInterval(() => {
             this.loadTasks();
-        }, 30000);
+        }, 10000);
 
-        // 每60秒刷新一次最新数据
+        // 每30秒刷新一次最新数据
         setInterval(() => {
             this.loadLatestData();
-        }, 60000);
+        }, 30000);
     }
 }
 
