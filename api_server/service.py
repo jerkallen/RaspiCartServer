@@ -11,6 +11,8 @@ from pydantic import BaseModel, Field
 from PIL import Image
 from datetime import datetime
 import json
+import base64
+from io import BytesIO
 
 from loader import get_all_active_projects, format_response
 
@@ -103,7 +105,7 @@ class InspectionAPIService:
     @bentoml.api(route="/api/process")
     async def process(
         self,
-        image: Image.Image,
+        image_base64: str,
         task_type: int,
         station_id: int,
         params: Optional[str] = None
@@ -112,7 +114,7 @@ class InspectionAPIService:
         统一处理路由
         
         Args:
-            image: 上传的图片
+            image_base64: base64编码的图片
             task_type: 任务类型（1-4）
             station_id: 站点ID
             params: 额外参数（JSON字符串）
@@ -120,6 +122,18 @@ class InspectionAPIService:
         Returns:
             处理结果
         """
+        # 解码base64图片
+        try:
+            img_data = base64.b64decode(image_base64)
+            image = Image.open(BytesIO(img_data))
+        except Exception as e:
+            logger.error(f"图片解码失败: {e}")
+            return format_response(
+                "error",
+                error=f"图片解码失败: {str(e)}",
+                error_code="IMAGE_DECODE_ERROR"
+            )
+        
         # 记录请求信息
         image_info = f"图片尺寸: {image.size}, 模式: {image.mode}" if image else "无图片"
         logger.info(f"收到处理请求 -> 任务类型: {task_type}, 站点ID: {station_id}, {image_info}")
@@ -165,7 +179,6 @@ class InspectionAPIService:
                 )
         
         # 将PIL Image转换为字节
-        from io import BytesIO
         img_bytes = BytesIO()
         image.save(img_bytes, format='PNG')
         img_bytes.seek(0)
