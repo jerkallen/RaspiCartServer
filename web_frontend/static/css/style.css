@@ -121,6 +121,83 @@ body {
     gap: 10px;
 }
 
+.button-group {
+    display: flex;
+    gap: 10px;
+    align-items: stretch;
+}
+
+.button-group .btn-primary {
+    flex: 3;
+}
+
+/* LOCK开关样式 */
+.lock-toggle-container {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.lock-toggle-label {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    user-select: none;
+}
+
+.lock-toggle-input {
+    display: none;
+}
+
+.lock-toggle-slider {
+    position: relative;
+    width: 45px;
+    height: 24px;
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 12px;
+    transition: all 0.3s ease;
+    border: 2px solid var(--border-color);
+}
+
+.lock-toggle-slider::before {
+    content: '';
+    position: absolute;
+    width: 18px;
+    height: 18px;
+    left: 2px;
+    top: 1px;
+    background: var(--text-secondary);
+    border-radius: 50%;
+    transition: all 0.3s ease;
+}
+
+.lock-toggle-input:checked + .lock-toggle-slider {
+    background: var(--accent-color);
+    border-color: var(--accent-color);
+    box-shadow: 0 0 10px rgba(41, 128, 185, 0.5);
+}
+
+.lock-toggle-input:checked + .lock-toggle-slider::before {
+    transform: translateX(21px);
+    background: white;
+}
+
+.lock-toggle-text {
+    font-size: 12px;
+    font-weight: bold;
+    color: var(--text-secondary);
+    transition: color 0.3s ease;
+    white-space: nowrap;
+    order: -1;
+}
+
+.lock-toggle-input:checked ~ .lock-toggle-text {
+    color: var(--accent-color);
+}
+
 .form-group {
     display: flex;
     flex-direction: column;

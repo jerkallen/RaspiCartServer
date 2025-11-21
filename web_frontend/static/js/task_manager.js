@@ -8,6 +8,8 @@ class TaskManager {
             3: null,
             4: null
         };
+        this.lockEnabled = false;
+        this.lockedTasks = new Set(); // 存储被锁定的任务类型
     }
 
     // 初始化
@@ -32,9 +34,33 @@ class TaskManager {
             clearQueueBtn.addEventListener('click', () => this.clearQueue());
         }
 
+        // LOCK开关
+        const lockToggle = document.getElementById('task-lock-toggle');
+        if (lockToggle) {
+            lockToggle.addEventListener('change', (e) => this.handleLockToggle(e.target.checked));
+        }
+
         // WebSocket事件监听
         wsManager.on('task_result', (data) => this.handleTaskResult(data));
         wsManager.on('task_queue_update', () => this.loadTasks());
+    }
+
+    // 处理LOCK开关切换
+    handleLockToggle(isEnabled) {
+        this.lockEnabled = isEnabled;
+        
+        if (isEnabled) {
+            // 当LOCK开启时，记录当前所有任务类型
+            this.lockedTasks.clear();
+            this.tasks.forEach(task => {
+                this.lockedTasks.add(task.task_type);
+            });
+            console.log('[任务管理] LOCK已开启，锁定任务类型:', Array.from(this.lockedTasks));
+            showNotification('🔒 LOCK模式已开启，任务完成后将自动重新添加', 'info');
+        } else {
+            console.log('[任务管理] LOCK已关闭');
+            showNotification('🔓 LOCK模式已关闭', 'info');
+        }
     }
 
     // 加载任务列表
@@ -90,8 +116,10 @@ class TaskManager {
     }
 
     // 添加任务
-    async addTask() {
-        const taskType = document.getElementById('task-type').value;
+    async addTask(taskType = null) {
+        if (!taskType) {
+            taskType = document.getElementById('task-type').value;
+        }
 
         if (!taskType) {
             showNotification('请选择任务类型', 'warning');
@@ -118,6 +146,13 @@ class TaskManager {
 
             if (result.status === 'success') {
                 showNotification('任务添加成功', 'success');
+                
+                // 如果LOCK开启，将此任务类型加入锁定列表
+                if (this.lockEnabled) {
+                    this.lockedTasks.add(parseInt(taskType));
+                    console.log('[任务管理] 任务类型已加入LOCK列表:', taskType);
+                }
+                
                 this.loadTasks();
             } else {
                 showNotification('任务添加失败: ' + result.error.message, 'danger');
@@ -304,6 +339,15 @@ class TaskManager {
 
             // 播放音效
             playAlertSound(status);
+            
+            // LOCK模式：任务完成后自动重新添加
+            if (this.lockEnabled && this.lockedTasks.has(taskType)) {
+                console.log('[任务管理] LOCK模式：自动重新添加任务类型', taskType);
+                // 延迟500ms后添加任务，避免与任务队列更新冲突
+                setTimeout(() => {
+                    this.addTask(taskType);
+                }, 500);
+            }
         }
     }
 
