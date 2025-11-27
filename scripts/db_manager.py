@@ -401,6 +401,30 @@ class DatabaseManager:
             cursor = conn.cursor()
             
             start_date = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d 00:00:00")
+            today_start = datetime.now().strftime("%Y-%m-%d 00:00:00")
+            
+            # 获取总任务数
+            cursor.execute("SELECT COUNT(*) as total_tasks FROM task_records")
+            total_result = cursor.fetchone()
+            total_tasks = dict(total_result)['total_tasks'] if total_result else 0
+            
+            # 获取今日任务数
+            cursor.execute(
+                "SELECT COUNT(*) as today_tasks FROM task_records WHERE timestamp >= ?",
+                (today_start,)
+            )
+            today_result = cursor.fetchone()
+            today_tasks = dict(today_result)['today_tasks'] if today_result else 0
+            
+            # 获取待处理任务数
+            cursor.execute("SELECT COUNT(*) as pending_tasks FROM task_queue WHERE status = 'pending'")
+            pending_result = cursor.fetchone()
+            pending_tasks = dict(pending_result)['pending_tasks'] if pending_result else 0
+            
+            # 获取未处理的报警数
+            cursor.execute("SELECT COUNT(*) as unhandled_alerts FROM alert_log WHERE handled = 0")
+            alerts_result = cursor.fetchone()
+            unhandled_alerts = dict(alerts_result)['unhandled_alerts'] if alerts_result else 0
             
             query = """
                 SELECT 
@@ -422,7 +446,13 @@ class DatabaseManager:
             cursor.execute(query, params)
             row = cursor.fetchone()
             
-            return dict(row) if row else {}
+            stats = dict(row) if row else {}
+            stats['total_tasks'] = total_tasks
+            stats['today_tasks'] = today_tasks
+            stats['pending_tasks'] = pending_tasks
+            stats['unhandled_alerts'] = unhandled_alerts
+            
+            return stats
     
     # ==================== 任务队列相关 ====================
     

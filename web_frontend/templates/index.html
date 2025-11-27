@@ -42,6 +42,7 @@
                             <option value="2">任务2 - 温度检测 (站点2)</option>
                             <option value="3">任务3 - 烟雾监测A (站点3)</option>
                             <option value="4">任务4 - 烟雾监测B (站点4)</option>
+                            <option value="5">任务5 - 物品描述 (站点5)</option>
                         </select>
                     </div>
                     <div class="button-group">
@@ -168,8 +169,7 @@
                     </div>
                     
                     <div class="panel-actions">
-                        <button class="btn btn-secondary">查看历史</button>
-                        <button class="btn btn-secondary">导出数据</button>
+                        <button class="btn btn-secondary" onclick="showHistory(1)">查看历史</button>
                     </div>
                 </div>
 
@@ -208,8 +208,7 @@
                     </div>
                     
                     <div class="panel-actions">
-                        <button class="btn btn-secondary">查看历史</button>
-                        <button class="btn btn-secondary">导出数据</button>
+                        <button class="btn btn-secondary" onclick="showHistory(2)">查看历史</button>
                     </div>
                 </div>
 
@@ -247,8 +246,7 @@
                     </div>
                     
                     <div class="panel-actions">
-                        <button class="btn btn-secondary">查看历史</button>
-                        <button class="btn btn-secondary">导出数据</button>
+                        <button class="btn btn-secondary" onclick="showHistory(3)">查看历史</button>
                     </div>
                 </div>
 
@@ -286,12 +284,67 @@
                     </div>
                     
                     <div class="panel-actions">
-                        <button class="btn btn-secondary">查看历史</button>
-                        <button class="btn btn-secondary">导出数据</button>
+                        <button class="btn btn-secondary" onclick="showHistory(4)">查看历史</button>
                     </div>
                 </div>
             </div>
+
+            <!-- 任务5: 物品描述 -->
+            <div class="task-panel task-panel-full">
+                <div class="panel-header">
+                    <h2 class="panel-title">📦 任务5 - 物品描述</h2>
+                    <span class="panel-status normal" id="status-5">正常</span>
+                </div>
+                
+                <div class="latest-data">
+                    <div class="data-item" style="width: 100%;">
+                        <div class="data-label">物品描述</div>
+                        <div class="data-value" style="text-align: left;">
+                            <span id="description-5" style="white-space: normal; word-break: break-word;">--</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="latest-image">
+                    <img id="image-5" src="" alt="最新图片" style="display: none;">
+                    <div class="no-image" id="no-image-5">暂无图片</div>
+                    <div class="image-overlay" id="image-overlay-5">--</div>
+                </div>
+                
+                <div class="panel-actions">
+                    <button class="btn btn-secondary" onclick="showHistory(5)">查看历史</button>
+                </div>
+            </div>
         </main>
+    </div>
+
+    <!-- 历史记录弹窗 -->
+    <div id="history-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="history-modal-title">历史记录</h2>
+                <button class="modal-close" onclick="closeHistory()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div id="history-loading" class="history-loading">
+                    <div class="loading"></div>
+                    <p>正在加载历史记录...</p>
+                </div>
+                <div id="history-grid" class="history-grid"></div>
+                <div id="history-empty" class="history-empty" style="display: none;">
+                    暂无历史记录
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 图片大图查看器 -->
+    <div id="image-viewer" class="image-viewer">
+        <div class="image-viewer-content">
+            <button class="viewer-close" onclick="closeImageViewer()">&times;</button>
+            <img id="viewer-image" src="" alt="查看大图">
+            <div class="image-info" id="viewer-info"></div>
+        </div>
     </div>
 
     <!-- 脚本文件 -->
@@ -299,6 +352,7 @@
     <script src="{{ url_for('static', filename='js/charts.js') }}"></script>
     <script src="{{ url_for('static', filename='js/task_manager.js') }}"></script>
     <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/history.js') }}"></script>
     
     <!-- 实时时钟 -->
     <script>

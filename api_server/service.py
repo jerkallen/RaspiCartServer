@@ -63,7 +63,7 @@ logger.addHandler(file_handler)
 # 请求模型定义
 class ProcessRequest(BaseModel):
     """处理请求模型"""
-    task_type: int = Field(..., description="任务类型（1-4）", ge=1, le=4)
+    task_type: int = Field(..., description="任务类型（1-5）", ge=1, le=5)
     station_id: int = Field(..., description="站点ID", ge=1)
     params: Optional[str] = Field(None, description="额外参数（JSON字符串）")
 
@@ -347,11 +347,11 @@ class InspectionAPIService:
         logger.info(f"收到处理请求 -> 任务类型: {task_type}, 站点ID: {station_id}, {image_info}")
         
         # 验证任务类型
-        if task_type not in [1, 2, 3, 4]:
+        if task_type not in [1, 2, 3, 4, 5]:
             logger.warning(f"无效的任务类型: {task_type}")
             return format_response(
                 "error",
-                error="无效的任务类型，必须是1-4之间的整数",
+                error="无效的任务类型，必须是1-5之间的整数",
                 error_code="INVALID_TASK_TYPE"
             )
         
@@ -360,7 +360,8 @@ class InspectionAPIService:
             1: "task1_pointer_reader",
             2: "task2_temperature",
             3: "task3_smoke_a",
-            4: "task4_smoke_b"
+            4: "task4_smoke_b",
+            5: "task5_object_description"
         }
         
         project_name = task_map[task_type]

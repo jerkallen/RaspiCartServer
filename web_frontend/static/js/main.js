@@ -284,7 +284,8 @@ function initApp() {
             1: '指针仪表',
             2: '温度检测',
             3: '烟雾监测A',
-            4: '烟雾监测B'
+            4: '烟雾监测B',
+            5: '物品描述'
         };
         const taskName = taskNames[taskData.task_type] || '未知任务';
         const status = taskData.result?.status || 'normal';

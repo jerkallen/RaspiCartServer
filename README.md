@@ -22,7 +22,9 @@ RaspiCartServer/
 │       │   └── processor.py
 │       ├── task3_smoke_a/           # 任务3: 烟雾判断A
 │       │   └── processor.py
-│       └── task4_smoke_b/           # 任务4: 烟雾判断B
+│       ├── task4_smoke_b/           # 任务4: 烟雾判断B
+│       │   └── processor.py
+│       └── task5_object_description/ # 任务5: 物品描述
 │           └── processor.py
 ├── data/                    # 数据存储
 │   ├── database/            # SQLite数据库
@@ -108,7 +110,7 @@ curl http://localhost:3000/health
 | 字段名 | 类型 | 必填 | 说明 |
 |--------|------|------|------|
 | image | File | 是 | 任务图片（JPEG/PNG） |
-| task_type | int | 是 | 任务类型（1-4） |
+| task_type | int | 是 | 任务类型（1-5） |
 | station_id | int | 是 | 站点ID |
 | params | JSON字符串 | 否 | 额外参数 |
 
@@ -117,6 +119,7 @@ curl http://localhost:3000/health
 - `2`: 高温物体检测
 - `3`: 烟雾判断A
 - `4`: 烟雾判断B
+- `5`: 物品描述识别
 
 **响应格式**（成功）:
 ```json
@@ -160,7 +163,7 @@ curl http://localhost:3000/health
 {
     "status": "healthy",
     "service": "inspection_api_service",
-    "processors": ["task1_pointer_reader", "task2_temperature", "task3_smoke_a", "task4_smoke_b"],
+    "processors": ["task1_pointer_reader", "task2_temperature", "task3_smoke_a", "task4_smoke_b", "task5_object_description"],
     "timestamp": "2024-11-21 14:30:00"
 }
 ```
@@ -182,6 +185,11 @@ curl http://localhost:3000/health
 
 - 调用DashScope视觉模型判断是否存在烟雾
 - 返回烟雾类型、密度、置信度等信息
+
+### 任务5: 物品描述
+
+- 调用DashScope视觉模型识别A4纸上的物品
+- 返回物品描述、物品列表、数量、置信度等信息
 
 ## 开发说明
 

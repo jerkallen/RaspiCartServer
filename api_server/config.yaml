@@ -55,6 +55,14 @@ projects:
     project_path: "processors/task4_smoke_b"
     params:
       model: "qwen-vl-plus"
+  
+  # 任务5: 物品描述
+  - name: task5_object_description
+    enabled: true
+    description: "物品描述识别"
+    project_path: "processors/task5_object_description"
+    params:
+      model: "qwen-vl-plus"
 
 # 全局限制
 limits:

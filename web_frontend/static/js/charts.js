@@ -294,6 +294,10 @@ wsManager.on('task_result', (data) => {
             value = taskData.result.max_temperature || 0;
         } else if (taskType === 3 || taskType === 4) {
             value = taskData.result.has_smoke ? 1 : 0;
+        } else if (taskType === 5) {
+            // 任务5：物品描述 - 更新UI元素
+            updateTask5Panel(taskData);
+            return; // 任务5不需要更新图表
         }
         
         chartManager.updateChart(taskType, {
@@ -302,4 +306,53 @@ wsManager.on('task_result', (data) => {
         });
     }
 });
+
+// 更新任务5面板
+function updateTask5Panel(taskData) {
+    const result = taskData.result;
+    const status = result.status || 'normal';
+    
+    // 更新描述文本
+    const descriptionEl = document.getElementById('description-5');
+    if (descriptionEl && result.description) {
+        descriptionEl.textContent = result.description;
+    }
+    
+    // 更新状态
+    const statusEl = document.getElementById('status-5');
+    if (statusEl) {
+        statusEl.className = `panel-status ${status}`;
+        const statusText = {
+            'normal': '正常',
+            'warning': '警告',
+            'danger': '危险'
+        };
+        statusEl.textContent = statusText[status] || '正常';
+    }
+    
+    // 更新图片
+    if (taskData.image_path) {
+        const imageEl = document.getElementById('image-5');
+        const noImageEl = document.getElementById('no-image-5');
+        const overlayEl = document.getElementById('image-overlay-5');
+        
+        if (imageEl && noImageEl) {
+            imageEl.src = '/' + taskData.image_path;
+            imageEl.style.display = 'block';
+            noImageEl.style.display = 'none';
+            
+            // 添加点击查看大图
+            imageEl.onclick = () => {
+                showImageViewer(imageEl.src, taskData);
+            };
+        }
+        
+        if (overlayEl) {
+            const timestamp = new Date(taskData.timestamp).toLocaleString('zh-CN');
+            overlayEl.textContent = timestamp;
+        }
+    }
+    
+    console.log('[任务5] UI更新完成');
+}
 

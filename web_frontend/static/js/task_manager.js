@@ -6,7 +6,8 @@ class TaskManager {
             1: null,
             2: null,
             3: null,
-            4: null
+            4: null,
+            5: null
         };
         this.lockEnabled = false;
         this.lockedTasks = new Set(); // 存储被锁定的任务类型
@@ -93,7 +94,8 @@ class TaskManager {
             1: '指针仪表',
             2: '温度检测',
             3: '烟雾监测A',
-            4: '烟雾监测B'
+            4: '烟雾监测B',
+            5: '物品描述'
         };
 
         container.innerHTML = this.tasks.map(task => `
@@ -209,7 +211,7 @@ class TaskManager {
 
     // 加载最新数据
     async loadLatestData() {
-        for (let taskType = 1; taskType <= 4; taskType++) {
+        for (let taskType = 1; taskType <= 5; taskType++) {
             try {
                 const response = await fetch(`/api/history?task_type=${taskType}&limit=1`);
                 const result = await response.json();
@@ -265,13 +267,19 @@ class TaskManager {
             this.updateDataDisplay(taskType, 'smoke', resultData.has_smoke ? '检测到' : '无', '');
             this.updateDataDisplay(taskType, 'confidence', 
                 ((resultData.confidence || 0) * 100).toFixed(0), '%');
+        } else if (taskType === 5) {
+            // 物品描述
+            this.updateDataDisplay(taskType, 'description', resultData.description || '--', '');
         }
 
         // 更新图片
-        if (record.image_path) {
+        const imageUrl = record.image_url || (record.image_path ? 
+            '/images/' + record.image_path.replace(/\\/g, '/').split('images/')[1] : null);
+        
+        if (imageUrl) {
             const imgEl = document.getElementById(`image-${taskType}`);
             if (imgEl) {
-                imgEl.src = '/images/' + record.image_path.replace(/\\/g, '/').split('images/')[1];
+                imgEl.src = imageUrl;
                 imgEl.style.display = 'block';
             }
 
@@ -324,7 +332,8 @@ class TaskManager {
                 1: '指针仪表',
                 2: '温度检测',
                 3: '烟雾监测A',
-                4: '烟雾监测B'
+                4: '烟雾监测B',
+                5: '物品描述'
             };
             const status = taskData.result.status || 'normal';
             

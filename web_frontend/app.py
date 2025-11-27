@@ -326,6 +326,22 @@ def get_history():
             offset=offset
         )
         
+        # 转换image_path为相对URL
+        for record in records:
+            if record.get('image_path'):
+                # 将绝对路径转换为相对URL
+                image_path = record['image_path']
+                if isinstance(image_path, str):
+                    # 提取日期/task/文件名部分
+                    parts = Path(image_path).parts
+                    if len(parts) >= 3:
+                        # 例如: 2025-11-21/task1/station01_231016.jpg
+                        record['image_url'] = f"/images/{parts[-3]}/{parts[-2]}/{parts[-1]}"
+                    else:
+                        record['image_url'] = None
+                else:
+                    record['image_url'] = None
+        
         logger.info(f"查询历史记录: 返回 {len(records)} 条")
         
         return jsonify({

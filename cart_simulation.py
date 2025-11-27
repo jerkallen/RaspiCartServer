@@ -58,6 +58,7 @@ IMAGE_FILES = {
     2: PROJECT_ROOT / 'heat_test.png',    # 站点2：热成像
     3: PROJECT_ROOT / 'smoke1_test.png',  # 站点3：烟雾探测1
     4: PROJECT_ROOT / 'smoke2_test.png',  # 站点4：烟雾探测2
+    5: PROJECT_ROOT / 'A4_test.png',   # 站点5：物品识别（临时使用meter_test.jpg，可替换为object_test.jpg）
 }
 
 # 模拟行驶时间（秒）
