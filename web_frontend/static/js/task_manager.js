@@ -29,12 +29,6 @@ class TaskManager {
             addTaskBtn.addEventListener('click', () => this.addTask());
         }
 
-        // 清空队列按钮
-        const clearQueueBtn = document.getElementById('clear-queue-btn');
-        if (clearQueueBtn) {
-            clearQueueBtn.addEventListener('click', () => this.clearQueue());
-        }
-
         // LOCK开关
         const lockToggle = document.getElementById('task-lock-toggle');
         if (lockToggle) {
@@ -183,29 +177,6 @@ class TaskManager {
         } catch (error) {
             console.error('[任务管理] 删除任务失败:', error);
             showNotification('任务删除失败', 'danger');
-        }
-    }
-
-    // 清空队列
-    async clearQueue() {
-        if (!confirm('确定要清空已完成的任务吗?')) {
-            return;
-        }
-
-        try {
-            const response = await fetch('/api/tasks/clear', {
-                method: 'POST'
-            });
-
-            const result = await response.json();
-
-            if (result.status === 'success') {
-                showNotification(`已清除 ${result.data.cleared_count} 个任务`, 'success');
-                this.loadTasks();
-            }
-        } catch (error) {
-            console.error('[任务管理] 清空队列失败:', error);
-            showNotification('清空队列失败', 'danger');
         }
     }
 

@@ -1096,3 +1096,213 @@ body {
     border: 1px solid var(--border-color);
 }
 
+/* ==================== 智能语音助手样式 ==================== */
+
+/* 语音助手内容区域 */
+.voice-assistant-content {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    width: 100%;
+}
+
+/* 输入区域 */
+.voice-input-area {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.voice-label {
+    font-size: 16px;
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+.voice-input-text {
+    width: 100%;
+    min-height: 120px;
+    padding: 15px;
+    background: var(--bg-secondary);
+    border: 2px solid var(--border-color);
+    border-radius: 8px;
+    color: var(--text-primary);
+    font-size: 15px;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    resize: vertical;
+    transition: all 0.3s ease;
+}
+
+.voice-input-text:focus {
+    outline: none;
+    border-color: var(--accent-color);
+    background: rgba(22, 33, 62, 0.95);
+}
+
+.voice-input-text::placeholder {
+    color: #999;
+    line-height: 1.6;
+}
+
+/* 按钮组 */
+.voice-buttons {
+    display: flex;
+    gap: 15px;
+    justify-content: center;
+}
+
+.voice-buttons .btn {
+    flex: 1;
+    max-width: 300px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 12px 20px;
+    font-size: 16px;
+    transition: all 0.3s ease;
+}
+
+.voice-buttons .btn .btn-icon {
+    font-size: 20px;
+}
+
+.voice-buttons .btn .btn-text {
+    font-weight: 500;
+}
+
+/* 录音中状态 */
+.voice-buttons .btn.recording {
+    background: var(--danger-color);
+    border-color: var(--danger-color);
+    animation: pulse 1.5s ease-in-out infinite;
+}
+
+.voice-buttons .btn.recording:hover {
+    background: #c0392b;
+    border-color: #c0392b;
+}
+
+.recording-icon {
+    animation: blink 1s ease-in-out infinite;
+}
+
+@keyframes pulse {
+    0%, 100% {
+        transform: scale(1);
+    }
+    50% {
+        transform: scale(1.05);
+    }
+}
+
+@keyframes blink {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.3;
+    }
+}
+
+/* 状态提示 */
+.voice-status {
+    padding: 12px 20px;
+    border-radius: 8px;
+    text-align: center;
+    font-size: 14px;
+    font-weight: 500;
+    display: none;
+    animation: slideInDown 0.3s ease;
+}
+
+@keyframes slideInDown {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.voice-status.info {
+    background: rgba(52, 152, 219, 0.2);
+    color: #3498db;
+    border: 1px solid rgba(52, 152, 219, 0.4);
+}
+
+.voice-status.success {
+    background: rgba(39, 174, 96, 0.2);
+    color: #27ae60;
+    border: 1px solid rgba(39, 174, 96, 0.4);
+}
+
+.voice-status.warning {
+    background: rgba(243, 156, 18, 0.2);
+    color: #f39c12;
+    border: 1px solid rgba(243, 156, 18, 0.4);
+}
+
+.voice-status.error {
+    background: rgba(231, 76, 60, 0.2);
+    color: #e74c3c;
+    border: 1px solid rgba(231, 76, 60, 0.4);
+}
+
+/* 结果显示 */
+.voice-result {
+    display: none;
+    animation: fadeIn 0.5s ease;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+.result-success {
+    background: rgba(39, 174, 96, 0.1);
+    border: 2px solid rgba(39, 174, 96, 0.3);
+    border-radius: 8px;
+    padding: 20px;
+}
+
+.result-title {
+    font-size: 18px;
+    font-weight: bold;
+    color: #27ae60;
+    margin-bottom: 15px;
+    text-align: center;
+}
+
+.result-detail {
+    color: var(--text-secondary);
+    font-size: 14px;
+    line-height: 1.8;
+}
+
+.result-detail p {
+    margin: 5px 0;
+}
+
+/* 响应式调整 */
+@media (max-width: 768px) {
+    .voice-buttons {
+        flex-direction: column;
+    }
+    
+    .voice-buttons .btn {
+        max-width: 100%;
+    }
+    
+    .voice-input-text {
+        min-height: 100px;
+    }
+}
+

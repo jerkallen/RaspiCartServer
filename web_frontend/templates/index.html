@@ -35,6 +35,7 @@
             <div class="sidebar-section">
                 <h3 class="section-title">📋 任务管理</h3>
                 <div class="task-controls">
+                    <button id="voice-assistant-btn" class="btn btn-secondary" style="width: 100%; margin-bottom: 15px;">🤖 智能助手</button>
                     <div class="form-group">
                         <label>任务类型</label>
                         <select id="task-type" class="form-select">
@@ -73,9 +74,6 @@
                 <div class="task-queue" id="task-queue-list">
                     <div class="empty-message">暂无待处理任务</div>
                 </div>
-                <button id="clear-queue-btn" class="btn btn-secondary" style="width: 100%; margin-top: 10px;">
-                    🗑️ 清空已完成
-                </button>
             </div>
 
             <!-- 小车状态 -->
@@ -347,12 +345,44 @@
         </div>
     </div>
 
+    <!-- 智能语音助手弹窗 -->
+    <div id="voice-assistant-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>🤖 智能助手</h2>
+                <button class="modal-close" onclick="closeVoiceAssistant()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="voice-assistant-content">
+                    <div class="voice-input-area">
+                        <label for="voice-input-text" class="voice-label">输入任务需求</label>
+                        <textarea id="voice-input-text" class="voice-input-text" placeholder="例如：检查压力表和物品识别&#10;或：检查站点1和站点5&#10;或：全部检查一遍"></textarea>
+                    </div>
+                    <div class="voice-buttons">
+                        <!-- 语音输入功能需要阿里云NLS SDK配置，暂时隐藏 -->
+                        <!-- <button id="voice-record-btn" class="btn btn-secondary">
+                            <span class="btn-icon">🎙️</span>
+                            <span class="btn-text">语音输入</span>
+                        </button> -->
+                        <button id="voice-send-btn" class="btn btn-primary" style="max-width: 100%;">
+                            <span class="btn-icon">📤</span>
+                            <span class="btn-text">发送</span>
+                        </button>
+                    </div>
+                    <div id="voice-status" class="voice-status"></div>
+                    <div id="voice-result" class="voice-result"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- 脚本文件 -->
     <script src="{{ url_for('static', filename='js/websocket.js') }}"></script>
     <script src="{{ url_for('static', filename='js/charts.js') }}"></script>
     <script src="{{ url_for('static', filename='js/task_manager.js') }}"></script>
     <script src="{{ url_for('static', filename='js/main.js') }}"></script>
     <script src="{{ url_for('static', filename='js/history.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/voice_assistant.js') }}"></script>
     
     <!-- 实时时钟 -->
     <script>

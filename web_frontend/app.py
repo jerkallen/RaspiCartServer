@@ -658,6 +658,126 @@ def api_notify_task_queue_update():
         }), 500
 
 
+# ==================== 智能语音助手API ====================
+
+@app.route('/api/voice/recognize', methods=['POST'])
+def voice_recognize():
+    """语音识别接口"""
+    try:
+        # 检查是否有上传的文件
+        if 'audio' not in request.files:
+            return jsonify({
+                "status": "error",
+                "error": {
+                    "code": "NO_AUDIO_FILE",
+                    "message": "未找到音频文件"
+                }
+            }), 400
+        
+        audio_file = request.files['audio']
+        
+        # 读取音频数据
+        audio_data = audio_file.read()
+        logger.info(f"收到语音识别请求，音频大小: {len(audio_data)} bytes")
+        
+        # 由于阿里云NLS SDK需要完整配置，这里提供降级方案
+        # 实际生产环境需要完整实现语音识别
+        
+        # 暂时返回提示信息，让用户使用文字输入
+        return jsonify({
+            "status": "error",
+            "error": {
+                "code": "NOT_IMPLEMENTED",
+                "message": "语音识别功能需要完整的阿里云NLS SDK配置，请使用文字输入"
+            }
+        }), 501
+        
+    except Exception as e:
+        logger.error(f"语音识别失败: {e}")
+        return jsonify({
+            "status": "error",
+            "error": {
+                "code": "RECOGNITION_ERROR",
+                "message": str(e)
+            }
+        }), 500
+
+
+@app.route('/api/intent/parse', methods=['POST'])
+def intent_parse():
+    """意图解析接口"""
+    try:
+        data = request.get_json()
+        
+        if not data or 'text' not in data:
+            return jsonify({
+                "status": "error",
+                "error": {
+                    "code": "MISSING_TEXT",
+                    "message": "缺少文本参数"
+                }
+            }), 400
+        
+        user_text = data['text'].strip()
+        
+        if not user_text:
+            return jsonify({
+                "status": "error",
+                "error": {
+                    "code": "EMPTY_TEXT",
+                    "message": "文本不能为空"
+                }
+            }), 400
+        
+        logger.info(f"收到意图解析请求: {user_text}")
+        
+        # 导入意图解析器
+        try:
+            from aliyun_services import IntentParser
+            parser = IntentParser()
+            result = parser.parse_intent(user_text)
+            
+            if result['success']:
+                logger.info(f"意图解析成功: 提取到 {len(result['tasks'])} 个任务")
+                return jsonify({
+                    "status": "success",
+                    "data": {
+                        "tasks": result['tasks'],
+                        "original_input": result['original_input'],
+                        "method": result.get('method', 'llm')
+                    },
+                    "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                })
+            else:
+                return jsonify({
+                    "status": "error",
+                    "error": {
+                        "code": "PARSE_FAILED",
+                        "message": "意图解析失败"
+                    }
+                }), 500
+                
+        except Exception as e:
+            logger.error(f"意图解析器初始化或执行失败: {e}")
+            return jsonify({
+                "status": "error",
+                "error": {
+                    "code": "PARSER_ERROR",
+                    "message": f"意图解析器错误: {str(e)}"
+                }
+            }), 500
+        
+    except Exception as e:
+        logger.error(f"意图解析接口错误: {e}")
+        return jsonify({
+            "status": "error",
+            "error": {
+                "code": "INTERNAL_ERROR",
+                "message": str(e)
+            }
+        }), 500
+
+
 # ==================== 错误处理 ====================
 
 @app.errorhandler(404)
