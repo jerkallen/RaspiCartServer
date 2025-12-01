@@ -10,25 +10,34 @@ const APP_CONFIG = {
 // 音效管理
 const AUDIO_FILES = {
     normal: '/static/audio/normal.mp3',
-    warning: '/static/audio/warning.mp3',
+    warning: '/static/audio/warning.wav',
     danger: '/static/audio/danger.mp3',
     complete: '/static/audio/complete.mp3'
 };
 
 // 播放报警音效
 function playAlertSound(level) {
-    // 音效功能可选，这里简化实现
-    console.log(`[音效] 播放: ${level}`);
-    
-    // 如果需要实际播放音效，取消下面的注释
-    /*
-    const audioFile = AUDIO_FILES[level] || AUDIO_FILES.normal;
-    const audio = new Audio(audioFile);
-    audio.volume = 0.5;
-    audio.play().catch(err => {
-        console.warn('[音效] 播放失败:', err);
+    return new Promise((resolve) => {
+        const audioFile = AUDIO_FILES[level] || AUDIO_FILES.normal;
+        const audio = new Audio(audioFile);
+        audio.volume = 0.5;
+        
+        // 监听播放结束事件
+        audio.addEventListener('ended', () => {
+            resolve();
+        });
+        
+        // 监听错误事件
+        audio.addEventListener('error', () => {
+            console.warn('[音效] 播放失败:', audioFile);
+            resolve(); // 即使失败也resolve，避免阻塞
+        });
+        
+        audio.play().catch(err => {
+            console.warn('[音效] 播放失败:', err);
+            resolve(); // 即使失败也resolve，避免阻塞
+        });
     });
-    */
 }
 
 // 显示通知
@@ -50,6 +59,163 @@ function showNotification(message, type = 'info', duration = 3000) {
             document.body.removeChild(notification);
         }, 300);
     }, duration);
+}
+
+// 显示危险确认弹窗
+function showDangerConfirmDialog(taskName, stationId, taskData) {
+    return new Promise((resolve) => {
+        // 创建弹窗遮罩层
+        const overlay = document.createElement('div');
+        overlay.className = 'danger-dialog-overlay';
+        overlay.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.85);
+            backdrop-filter: blur(5px);
+            z-index: 5000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            animation: fadeIn 0.3s ease;
+        `;
+
+        // 创建弹窗内容
+        const dialog = document.createElement('div');
+        dialog.className = 'danger-dialog';
+        dialog.style.cssText = `
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            border-radius: 12px;
+            padding: 30px;
+            max-width: 500px;
+            width: 90%;
+            box-shadow: 0 8px 40px rgba(231, 76, 60, 0.6);
+            border: 3px solid #e74c3c;
+            animation: slideDown 0.3s ease;
+            position: relative;
+        `;
+
+        // 危险图标和标题
+        const title = document.createElement('div');
+        title.style.cssText = `
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid #e74c3c;
+        `;
+        
+        const icon = document.createElement('div');
+        icon.textContent = '🚨';
+        icon.style.cssText = 'font-size: 48px;';
+        
+        const titleText = document.createElement('div');
+        titleText.innerHTML = `
+            <div style="font-size: 24px; font-weight: bold; color: #e74c3c; margin-bottom: 5px;">危险警报</div>
+            <div style="font-size: 16px; color: #f5f5f5;">${taskName} - 站点${stationId}</div>
+        `;
+        
+        title.appendChild(icon);
+        title.appendChild(titleText);
+
+        // 消息内容
+        const message = document.createElement('div');
+        message.style.cssText = `
+            font-size: 16px;
+            color: #f5f5f5;
+            line-height: 1.6;
+            margin-bottom: 25px;
+            padding: 15px;
+            background: rgba(231, 76, 60, 0.1);
+            border-radius: 8px;
+            border-left: 4px solid #e74c3c;
+        `;
+        message.textContent = `检测到危险状态！请立即检查并处理。`;
+
+        // 确认按钮
+        const buttonContainer = document.createElement('div');
+        buttonContainer.style.cssText = `
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+        `;
+        
+        const confirmBtn = document.createElement('button');
+        confirmBtn.textContent = '我已了解';
+        confirmBtn.style.cssText = `
+            padding: 12px 40px;
+            background: #e74c3c;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(231, 76, 60, 0.4);
+        `;
+        
+        confirmBtn.onmouseover = () => {
+            confirmBtn.style.background = '#c0392b';
+            confirmBtn.style.transform = 'translateY(-2px)';
+            confirmBtn.style.boxShadow = '0 6px 20px rgba(231, 76, 60, 0.6)';
+        };
+        
+        confirmBtn.onmouseout = () => {
+            confirmBtn.style.background = '#e74c3c';
+            confirmBtn.style.transform = 'translateY(0)';
+            confirmBtn.style.boxShadow = '0 4px 15px rgba(231, 76, 60, 0.4)';
+        };
+        
+        confirmBtn.onclick = () => {
+            overlay.style.animation = 'fadeOut 0.3s ease';
+            setTimeout(() => {
+                document.body.removeChild(overlay);
+                resolve();
+            }, 300);
+        };
+
+        buttonContainer.appendChild(confirmBtn);
+
+        // 组装弹窗
+        dialog.appendChild(title);
+        dialog.appendChild(message);
+        dialog.appendChild(buttonContainer);
+        overlay.appendChild(dialog);
+
+        // 添加到页面
+        document.body.appendChild(overlay);
+
+        // 添加动画样式（如果还没有）
+        if (!document.getElementById('danger-dialog-styles')) {
+            const style = document.createElement('style');
+            style.id = 'danger-dialog-styles';
+            style.textContent = `
+                @keyframes fadeIn {
+                    from { opacity: 0; }
+                    to { opacity: 1; }
+                }
+                @keyframes fadeOut {
+                    from { opacity: 1; }
+                    to { opacity: 0; }
+                }
+                @keyframes slideDown {
+                    from {
+                        transform: translateY(-50px);
+                        opacity: 0;
+                    }
+                    to {
+                        transform: translateY(0);
+                        opacity: 1;
+                    }
+                }
+            `;
+            document.head.appendChild(style);
+        }
+    });
 }
 
 // 格式化时间

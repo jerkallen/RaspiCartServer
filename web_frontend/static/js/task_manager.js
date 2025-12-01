@@ -11,6 +11,7 @@ class TaskManager {
         };
         this.lockEnabled = false;
         this.lockedTasks = new Set(); // 存储被锁定的任务类型
+        this.previousTaskCount = 0; // 记录之前的任务数量，用于检测所有任务完成
     }
 
     // 初始化
@@ -65,6 +66,12 @@ class TaskManager {
             const result = await response.json();
 
             if (result.status === 'success') {
+                const currentTaskCount = result.data.tasks.length;
+                
+                // 注意：所有任务完成的音效现在在 handleTaskResult 中处理
+                // 这里只更新任务列表显示
+                
+                this.previousTaskCount = currentTaskCount;
                 this.tasks = result.data.tasks;
                 this.renderTaskQueue();
                 this.updateTaskCount();
@@ -311,14 +318,44 @@ class TaskManager {
             // 根据状态显示不同类型的通知
             if (status === 'danger') {
                 showNotification(`⚠️ 警报！${taskNames[taskType]}检测到危险状态！`, 'danger');
+                // 同时播放危险音频和显示确认弹窗
+                playAlertSound('danger');
+                showDangerConfirmDialog(taskNames[taskType], taskData.station_id, taskData);
             } else if (status === 'warning') {
                 showNotification(`⚠️ ${taskNames[taskType]}检测到警告状态`, 'warning');
             } else {
                 showNotification(`${taskNames[taskType]}任务完成`, 'success');
             }
 
-            // 播放音效
-            playAlertSound(status);
+            // 播放音效（非危险状态）
+            if (status !== 'danger') {
+                playAlertSound(status).then(() => {
+                    // 音效播放完成后，检查是否是最后一个任务
+                    // 延迟检查，确保任务队列已更新
+                    setTimeout(async () => {
+                        try {
+                            const response = await fetch('/api/tasks');
+                            const result = await response.json();
+                            
+                            if (result.status === 'success') {
+                                const remainingTasks = result.data.tasks.length;
+                                
+                                // 如果这是最后一个任务（任务完成后队列为空），且LOCK模式未开启
+                                if (remainingTasks === 0 && !this.lockEnabled) {
+                                    console.log('[任务管理] 最后一个任务完成，准备播放完成音效');
+                                    // 等待2秒后播放完成音效
+                                    setTimeout(() => {
+                                        playAlertSound('complete');
+                                        showNotification('🎉 所有任务已完成！', 'success');
+                                    }, 2000);
+                                }
+                            }
+                        } catch (error) {
+                            console.error('[任务管理] 检查任务队列失败:', error);
+                        }
+                    }, 100); // 短暂延迟，确保任务队列已更新
+                });
+            }
             
             // LOCK模式：任务完成后自动重新添加
             if (this.lockEnabled && this.lockedTasks.has(taskType)) {
