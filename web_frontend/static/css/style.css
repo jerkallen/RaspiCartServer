@@ -677,6 +677,75 @@ body {
 }
 
 /* 响应式设计 */
+/* 针对1080p分辨率（高度约1080px）的优化 */
+@media (max-height: 1080px) and (min-width: 1400px) {
+    .task-panels {
+        grid-template-rows: repeat(2, minmax(320px, 1fr));
+        gap: 12px;
+    }
+    
+    .task-panel {
+        padding: 15px;
+        gap: 8px 12px;
+    }
+    
+    .chart-container {
+        min-height: 140px;
+    }
+    
+    .latest-image {
+        min-height: 160px;
+    }
+    
+    .task-panel-full {
+        grid-template-rows: auto auto 1fr auto;
+    }
+    
+    .task-panel-full .latest-image {
+        min-height: 250px;
+    }
+    
+    .panel-header {
+        padding-bottom: 8px;
+    }
+    
+    .panel-title {
+        font-size: 16px;
+    }
+    
+    .data-value {
+        font-size: 28px;
+    }
+    
+    .data-unit {
+        font-size: 16px;
+    }
+}
+
+/* 针对更小的1080p窗口（考虑浏览器UI占用） */
+@media (max-height: 1000px) and (min-width: 1400px) {
+    .task-panels {
+        grid-template-rows: repeat(2, minmax(300px, 1fr));
+        gap: 10px;
+    }
+    
+    .task-panel {
+        padding: 12px;
+    }
+    
+    .chart-container {
+        min-height: 120px;
+    }
+    
+    .latest-image {
+        min-height: 140px;
+    }
+    
+    .task-panel-full .latest-image {
+        min-height: 220px;
+    }
+}
+
 @media (max-width: 1600px) {
     .task-panel {
         grid-template-columns: 1fr;
