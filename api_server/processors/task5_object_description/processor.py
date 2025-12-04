@@ -35,26 +35,8 @@ class ObjectDescriptionProcessor(BaseProject):
         return "任务5: 物品描述识别"
     
     def get_prompt(self) -> str:
-        """获取提示词模板"""
-        return """请分析图片中A4纸上放置的物品，并提供简要描述。
-
-分析要点：
-1. 识别A4纸上放置的所有物品
-2. 描述物品的类型、颜色、大小等特征
-3. 判断物品的摆放状态（整齐/凌乱）
-4. 如果有多个物品，列出所有物品
-
-返回格式（纯JSON，无其他文字）：
-{
-    "description": "简要描述A4纸上的物品情况",
-    "items": ["物品1", "物品2", ...],
-    "item_count": 物品数量,
-    "arrangement": "neat/messy/normal",
-    "confidence": 置信度(0-1),
-    "status": "normal"
-}
-
-注意：如果图片中没有清晰的A4纸或物品不清晰，confidence设为低值"""
+        """获取提示词模板（从配置文件读取）"""
+        return self.get_prompt_from_config("task5_object_description")
     
     def validate_input(self, data: Dict[str, Any]) -> bool:
         """

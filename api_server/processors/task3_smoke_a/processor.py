@@ -35,29 +35,8 @@ class SmokeDetectorAProcessor(BaseProject):
         return "任务3: 烟雾判断A"
     
     def get_prompt(self) -> str:
-        """获取提示词模板"""
-        return """请分析图片内容，判断其中是否存在烟雾。
-
-烟雾定义：包括但不限于
-- 燃烧产生的黑烟、白烟
-- 蒸汽、水雾
-- 工业排放的烟气
-- 任何悬浮在空气中的烟雾状物质
-
-分析要点：
-1. 是否有明显的烟雾形态
-2. 烟雾的密度（轻微/中等/严重）
-3. 烟雾的颜色和分布范围
-4. 排除误判（如云、雾霾等自然现象需根据场景判断）
-
-返回格式（纯JSON，无其他文字）：
-{
-    "has_smoke": true或false,
-    "smoke_type": "combustion/steam/fog/none",
-    "density": "light/medium/heavy/none",
-    "confidence": 置信度(0-1),
-    "description": "简短描述"
-}"""
+        """获取提示词模板（从配置文件读取）"""
+        return self.get_prompt_from_config("task3_smoke_a")
     
     def validate_input(self, data: Dict[str, Any]) -> bool:
         """
@@ -123,15 +102,9 @@ class SmokeDetectorAProcessor(BaseProject):
             # 解析JSON响应
             result = self.dashscope.parse_json_response(response_text)
             
-            # 根据烟雾情况设置状态
+            # 根据烟雾情况设置状态：有烟雾即为危险
             if result.get("has_smoke", False):
-                density = result.get("density", "none")
-                if density == "heavy":
-                    result["status"] = "danger"
-                elif density == "medium":
-                    result["status"] = "warning"
-                else:
-                    result["status"] = "warning"
+                result["status"] = "danger"
             else:
                 result["status"] = "normal"
             

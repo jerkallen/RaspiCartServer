@@ -35,26 +35,8 @@ class PointerReaderProcessor(BaseProject):
         return "任务1: 指针式仪表读数识别"
     
     def get_prompt(self) -> str:
-        """获取提示词模板"""
-        return """请读取这个指针式仪表的数值。
-
-分析步骤：
-1. 识别表盘的量程范围（最小值到最大值）
-2. 识别表盘的刻度间隔
-3. 确定指针的精确位置
-4. 计算读数（保留2位小数）
-
-返回格式（纯JSON，无其他文字）：
-{
-    "value": 读数值,
-    "unit": "单位（如MPa、℃等）",
-    "min_range": 最小刻度,
-    "max_range": 最大刻度,
-    "confidence": 置信度(0-1),
-    "status": "normal/warning/danger"
-}
-
-注意：如果指针不清晰或表盘损坏，confidence设为低值并在status中标注warning"""
+        """获取提示词模板（从配置文件读取）"""
+        return self.get_prompt_from_config("task1_pointer_reader")
     
     def validate_input(self, data: Dict[str, Any]) -> bool:
         """

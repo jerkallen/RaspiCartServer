@@ -5,6 +5,7 @@
 import os
 import json
 import base64
+import yaml
 from typing import Dict, Any, List, Optional
 from pathlib import Path
 from dotenv import load_dotenv
@@ -124,7 +125,31 @@ class IntentParser:
         self.client = OpenAI(api_key=self.api_key, base_url=base_url)
         self.model = "qwen-plus"
         
+        # 加载配置中的提示词
+        self._load_prompts()
+        
         logger.info("意图解析服务初始化成功")
+    
+    def _load_prompts(self):
+        """从配置文件加载提示词"""
+        try:
+            config_path = Path(__file__).parent.parent / "api_server" / "config.yaml"
+            if config_path.exists():
+                with open(config_path, "r", encoding="utf-8") as f:
+                    config = yaml.safe_load(f)
+                prompts = config.get("prompts", {})
+                intent_parser_prompts = prompts.get("intent_parser", {})
+                self.system_prompt = intent_parser_prompts.get("system", "")
+                self.user_template = intent_parser_prompts.get("user_template", "")
+            else:
+                # 如果配置文件不存在，使用默认值
+                self.system_prompt = "你是一个智能巡检系统的任务解析助手。你的职责是理解用户的检查需求，并将其转换为具体的任务列表。"
+                self.user_template = ""
+                logger.warning(f"配置文件不存在: {config_path}，使用默认提示词")
+        except Exception as e:
+            logger.error(f"加载提示词配置失败: {e}，使用默认值")
+            self.system_prompt = "你是一个智能巡检系统的任务解析助手。你的职责是理解用户的检查需求，并将其转换为具体的任务列表。"
+            self.user_template = ""
     
     def parse_intent(self, user_input: str) -> Dict[str, Any]:
         """
@@ -144,7 +169,7 @@ class IntentParser:
             messages = [
                 {
                     "role": "system",
-                    "content": "你是一个智能巡检系统的任务解析助手。你的职责是理解用户的检查需求，并将其转换为具体的任务列表。"
+                    "content": self.system_prompt
                 },
                 {
                     "role": "user",
@@ -177,8 +202,13 @@ class IntentParser:
             return self._fallback_parse(user_input)
     
     def _build_prompt(self, user_input: str) -> str:
-        """构造提示词"""
-        prompt = f"""
+        """构造提示词（从配置文件读取模板）"""
+        if self.user_template:
+            # 使用配置文件中的模板
+            prompt = self.user_template.format(user_input=user_input)
+        else:
+            # 降级方案：使用默认模板
+            prompt = f"""
 请分析用户的检查需求，并返回需要执行的任务列表。
 
 系统支持的任务类型：
