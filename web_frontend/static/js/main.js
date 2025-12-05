@@ -350,7 +350,7 @@ class CartStatusManager {
         const modeText = modeMap[this.status.mode] || this.status.mode || '--';
         this.updateInfo('cart-mode', modeText);
         
-        this.updateInfo('cart-battery', this.status.battery_level ? `${this.status.battery_level}%` : '--');
+        this.updateInfo('cart-battery', 'N/A');
         
         if (this.status.last_activity) {
             this.updateInfo('cart-activity', formatRelativeTime(this.status.last_activity));
